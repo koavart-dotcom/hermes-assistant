@@ -125,3 +125,44 @@
 1. Браузер: Playwright через Node-сайдкар (по промту) или CDP из Rust (chromiumoxide)?
 2. Голос: согласен ли на sherpa-onnx вместо whisper.cpp напрямую?
 3. LLM-слой в Rust: свои адаптеры с нуля или поверх `rig`?
+
+## 6. Вариант «Hermes Agent как основа» (проверено 15.10.2026)
+
+Источник: github.com/NousResearch/hermes-agent (MIT), документация hermes-agent.nousresearch.com.
+Метаданные: 254 081★, 55 171 форков, 100+ контрибьюторов, релизы v0.22.0–v0.22.2 за 14–15.10.2026
+(проект очень активный, API меняется часто).
+
+| Требование мастер-промта | Что есть в Hermes Agent / Hermes Desktop | Статус |
+|---|---|---|
+| Desktop-приложение Windows/macOS (§2.4) | **Hermes Desktop**: Electron + React 19 (`apps/desktop`), чат со стримингом и активностью инструментов, боковые панели (файлы, терминал, cron, skills, память, мессенджеры), настройки провайдеров/моделей/инструментов/MCP, трей, HUD-панель поверх окон, Quick Entry по глобальной горячей клавише, самообновление. Установщики NSIS/MSI, DMG | есть, но **Electron, не Tauri** |
+| Нативный Windows (§2.4) | `install.ps1`, установка в `%LOCALAPPDATA%\hermes`, gateway как задача Планировщика (ONLOGON, `pythonw.exe`), CLI/TUI/gateway/cron/MCP/браузер/дашборд работают нативно. Терминал — через Git Bash | есть |
+| Гибридный AI, local-first (§2.1, §4, §11) | Ollama, LM Studio, llama-server локально; OpenAI, Anthropic, Gemini, OpenRouter и др.; fallback-провайдеры, provider routing | есть |
+| Agent Runtime, инструменты, лимиты (§7) | ядро Hermes: цикл инструментов, toolsets, память, skills, delegation, MCP (stdio/HTTP) | есть |
+| Разрешения и подтверждения (§7, §13) | `approvals.mode: smart/manual/off`, ответы once/session/always/deny, `approvals.deny` (glob, действует даже в YOLO), неотключаемый hardline-blocklist, `HERMES_WRITE_SAFE_ROOT`, запрещённые пути (`~/.ssh`, `.env`); плагин-хук `pre_tool_call` может **block / modify / approve** (fail-closed по таймауту) | есть; наши уровни Read-only/Normal/Confirm/Blocked реализуются плагином `pre_tool_call` |
+| Управление ПК (§8) | `terminal`, `read_file`, `patch`, `process`; **computer-use**: на Windows UIAutomation + `SendInput`/`PostMessage` без захвата фокуса, accessibility-дерево окон, драйвер cua-driver ставится вместе с Hermes | есть (драйвер сторонний, cua.ai) |
+| Браузер (§9) | встроенный browser tool: Chromium через Node (CDP), снапшоты, vision, отдельный/реальный профиль, website blocklist, SSRF-защита | есть (не Playwright, но функционально то же) |
+| Голос (§10) | STT: local Faster-Whisper (Windows x64 поддержан, без ключа, `stt.language: ru`), live-транскрипция; TTS: Piper/NeuTTS/KittenTTS локально, Edge/OpenAI/ElevenLabs облако, стриминг; voice mode в CLI/TUI/Desktop, push-to-talk, barge-in, фильтр галлюцинаций; wake word: openWakeWord («hey hermes», Windows x64), sherpa, Porcupine (встроенное слово «jarvis») | есть; русская фраза активации — через sherpa/Porcupine custom или своя `.tflite` |
+| Локальный API для своего UI (§5, если UI делать свой) | `api_server` на `127.0.0.1:8642`, Bearer `API_SERVER_KEY`: OpenAI-совместимый `/v1/chat/completions` и `/v1/responses` со SSE, `/v1/runs` + `/events` (SSE) + `/approval` + `/steer` + `/stop`, сессии `/api/sessions/*/chat/stream`; Desktop ходит в gateway по `/api/ws` | есть |
+| Хранение (§14) | SQLite-состояние (`hermes_state_*`), сессии, FTS-поиск, чекпоинты и откат | есть |
+| Секреты (§13) | `.env` 600, credential vault/pools, фильтрация KEY/TOKEN/SECRET из окружения инструментов | есть, но не Credential Manager/Keychain |
+| Интеграции (§12) | 25+ платформ gateway (Telegram, Discord, Slack, WhatsApp, Signal, Email, Home Assistant…), webhooks, plugin catalog, skills (SKILL.md) | есть, шире промта |
+| Cron, память, дашборд | cron, memory providers, web dashboard (FastAPI + React, :9119) с плагинными вкладками | есть, сверх промта |
+
+**Чего нет или что не совпадает с промтом:** стек Electron + Python вместо Tauri + Rust; терминал на
+Windows — Git Bash, не PowerShell (PowerShell вызывается из bash); `smart`-режим одобрений решает
+LLM (для «полного доступа к ПК» ставить `manual` + `approvals.deny`); вкладка Chat дашборда на нативном
+Windows требует WSL2; desktop-плагины не изолированы; очень быстрый темп релизов — обновления могут
+ломать конфиг; computer-use опирается на сторонний драйвер cua-driver.
+
+**Наш опыт (11–14.10.2026, Mac):** Telegram, голосовые сообщения (Faster-Whisper ru + Piper ru), озвучка через
+хук, cron-триаж FreeScout, SSH-инструменты к ПК и серверу — всё заработало за три дня; упёрлись только в
+16 ГБ памяти Mac. Skills и конфиг из `archive/hermes-agent/` переносятся на ПК без переписывания.
+
+**Варианты:**
+- **A. Hermes Desktop как есть + наша надстройка.** Установить Hermes нативно на ПК, Ollama на 3080 Ti,
+  настроить toolsets/approvals/голос на русском, писать только: плагин разрешений (`pre_tool_call`),
+  skills и интеграции Deka, свои вкладки дашборда/HUD. Срок до рабочего помощника — дни, не месяцы.
+- **B. Свой тонкий UI (Tauri) поверх Hermes gateway** через `api_server` (`/v1/runs` + SSE + `/approval`).
+  Нужен, только если UI Hermes Desktop не устроит. Мозг, инструменты и голос — всё равно Hermes.
+- **C. С нуля по мастер-промту** (Tauri + Rust): полный контроль и «чистый» стек, но это повторение
+  того, что в Hermes уже сделано сотней контрибьюторов; реалистичный срок до уровня Hermes — месяцы.
