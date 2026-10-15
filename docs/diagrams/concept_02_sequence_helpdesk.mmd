@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    participant Cron as ⏰ Планировщик Hermes
+    participant Agent as 🤖 Hermes Agent (Mac)
+    participant Local as 🧠 Локальная модель (LM Studio)
+    participant Cloud as ☁️ Claude API
+    participant HD as 🎫 Хелпдеск FreeScout
+    participant PC as 💻 ПК сотрудника
+    participant TG as 📱 Артем в Telegram
+
+    Cron->>Agent: каждые 10 мин: проверить заявки
+    Agent->>HD: GET новые заявки
+    HD-->>Agent: список заявок
+    Agent->>Local: классифицировать, найти похожие закрытые
+    Local-->>Agent: категория, похожие, уровень риска
+    alt L0 — только чтение
+        Agent->>HD: внутренняя заметка + черновик ответа
+    else L1 — рецепт из allowlist
+        Agent->>Cloud: план действий по рецепту
+        Cloud-->>Agent: шаги
+        Agent->>PC: выполнить (SSH / WinRM)
+        PC-->>Agent: результат
+        Agent->>HD: ответ в заявку, заметка
+        Agent->>TG: отчёт «починил»
+    else L2 — не в allowlist
+        Agent->>TG: предложение плана, кнопка «ОК»
+        TG-->>Agent: подтверждение
+        Agent->>Cloud: выполнить план
+        Cloud-->>Agent: шаги и инструменты
+        Agent->>PC: выполнить
+        Agent->>HD: ответ в заявку
+    end
+    Agent->>Agent: запись в журнал
