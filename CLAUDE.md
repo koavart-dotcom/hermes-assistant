@@ -1,126 +1,123 @@
-# Hermes — локальный ИИ-помощник для Windows (и macOS)
+# Hermes — личный ИИ-помощник на ПК Артема (Tauri-оболочка поверх Hermes Agent)
 
-Личный проект Артема, создан 11.10.2026, **концепт сменён 15.10.2026**. Имя помощника — **Hermes**
-(решение Артема 15.10.2026; в мастер-промте он называется Nexus — читать как Hermes). НЕ связан с проектом
-Jarvis (локальная LLM в Deka) и НЕ является Hermes Agent от Nous Research (тот заморожен, см. ниже).
-Репозиторий: https://github.com/koavart-dotcom/hermes-assistant (private, аккаунт koavart-dotcom). Цель: desktop-приложение-агент на основном ПК Артема: текст и голос,
-локальная модель по умолчанию, облако по выбору, управление компьютером и браузером через
-ограниченные инструменты с подтверждением важных действий.
+Личный проект Артема, создан 11.10.2026. Концепт менялся дважды: 11.10 — Hermes Agent на Mac;
+15.10 утром — своё приложение с нуля по мастер-промту; **15.10 вечером — вариант B (действующий):
+своё desktop-приложение «Hermes» на Tauri 2 + React + Rust, внутри которого в одном установщике
+едет Hermes Agent (Nous Research, мозг и инструменты) и Ollama (локальные модели).** Пользователь
+ничего не ставит вручную: один установщик, первый запуск сам разворачивает всё нужное.
+НЕ связан с проектом Jarvis (локальная LLM в Deka).
+Репозиторий: https://github.com/koavart-dotcom/hermes-assistant (private, аккаунт koavart-dotcom), ветка `main`.
 
-## Главный документ — мастер-промт
+## Документы-основания
 
-**`Nexus_AI_Assistant_Claude_Code_Master_Prompt.md`** (корень репозитория, 674 строки) — техническое
-задание и основное задание для Claude Code. Перед любой крупной работой перечитать нужный раздел.
-CLAUDE.md его не дублирует, а хранит только то, чего в промте нет: решения Артема, факты об окружении,
-статус, правила репозитория. При противоречии: решения Артема в чате > CLAUDE.md > мастер-промт.
+- **`Nexus_AI_Assistant_Claude_Code_Master_Prompt.md`** — ТЗ Артема на приложение (в нём помощник
+  называется Nexus, читать как Hermes). Действует для оболочки: §2 решения, §3 стек, §5 экраны, §6
+  жизненный цикл, §13 безопасность, §17–§19 надёжность/тесты/сборка, §22 правила работы.
+  Разделы §7 Agent Runtime, §8 DesktopControl, §9 браузер, §10 голосовые движки, §11 Ollama-сервис,
+  §12 интеграции **закрывает Hermes Agent**, а не наш код; наша работа там — конфигурация, плагин
+  разрешений и UI. При противоречии: решения Артема в чате > CLAUDE.md > мастер-промт.
+- **`docs/OPEN_SOURCE_RESEARCH.md`** — исследование аналогов и Hermes Agent (15.10.2026), с фактами
+  о возможностях Hermes (раздел 6). **`docs/ARCHITECTURE.md`**, **`docs/ROADMAP.md`** — архитектура и
+  этапы варианта B. **`docs/decisions.md`** — ADR.
+- Перед опорой на любую возможность Hermes Agent проверять актуальную документацию
+  (hermes-agent.nousresearch.com, репозиторий NousResearch/hermes-agent): релизы выходят ежедневно,
+  API меняется. Версия, на которую ориентируемся, фиксируется в `docs/ARCHITECTURE.md`.
 
-Карта промта: §2 архитектурные решения · §3 стек · §4 ModelRouter · §5 экраны UI · §6 жизненный цикл
-агента · §7 Agent Runtime и описание инструмента · §8 DesktopControl · §9 браузер (Playwright) ·
-§10 голос · §11 Ollama · §12 Integration SDK · §13 безопасность · §14 SQLite → PostgreSQL ·
-§15 open-source research (8 репозиториев, `docs/OPEN_SOURCE_RESEARCH.md`) · §16 структура проекта ·
-§18 тесты · §19 сборка · §20 этапы MVP (8 этапов) · §21 критерии готовности · §22 правила работы ·
-§23 первый ответ.
+## Ключевые решения
 
-## Ключевые решения (15.10.2026)
-
-- **Приложение живёт на основном ПК Артема (Windows 11).** Это первая и главная целевая платформа.
-  macOS — вторая цель по промту; Mac mini M4 (`ssh mac`) есть и годится для проверки сборки позже.
-- **Hermes Agent на Mac заморожен.** Ему не хватает мощности (16 ГБ). Служба на Mac не трогается
-  и не развивается; всё, что было сделано (конфиг, skills, скрипты), перенесено в `archive/hermes-agent/`.
-  Наработки оттуда (правила опасных инструментов, FreeScout-триаж, Piper-озвучка) — источник идей
-  для интеграций Hermes, не код для переноса.
-- **Стек — из мастер-промта §3:** Tauri 2.x, Rust для системного слоя, React + TypeScript + Vite,
-  Tailwind CSS + shadcn/ui, Zustand, TanStack Query по необходимости. SQLite (миграции,
-  репозитории), секреты — Windows Credential Manager / macOS Keychain. Playwright для браузера.
-  Отклонение от корпоративного стека (Nuxt) согласовано: личный проект, промт задаёт React.
-  В опросе 15.10 Артем сначала выбрал C#/.NET, но мастер-промт, присланный следом, задаёт Tauri —
-  действует промт.
-- **Модели.** Локальный провайдер по умолчанию — Ollama на ПК (RTX 3080 Ti, 12 ГБ VRAM).
-  Ориентир: dense-модель класса 9–14B в Q4 целиком в VRAM (Qwen3.5 9B и аналоги из `docs/models.md`),
-  MoE с выгрузкой экспертов в ОЗУ (32 ГБ) — как эксперимент. Второй «локальный» провайдер —
-  Jarvis Deka (OpenAI-совместимый, Qwen3.8-27B, `archive/hermes-agent/config/README.md`) через адаптер
-  OpenAI-compatible, только в сети Deka. Облако: Anthropic (ключа пока нет), OpenAI, Gemini —
-  по выбору пользователя, с явным согласием на отправку данных (промт §4).
-- **На ПК Артема ставится только готовое приложение** (установщик Hermes из GitHub Releases/CI) и
-  Ollama как runtime локальных моделей. Инструменты сборки (Node, Rust, MSVC) на ПК не ставим:
-  Windows-сборку делает GitHub Actions (windows runner), разработка и быстрые проверки — на Linux
-  (Linux-сборка Tauri для UI, `cargo test`, vitest). Решение Артема 15.10.2026.
-- **Первый пользовательский сценарий (MVP):** голосовой чат + действия на этом же ПК
-  (открыть приложение, файлы в разрешённых папках, системная информация, безопасные команды).
-  Сценарии Deka (хелпдеск FreeScout, Telegram) — позже, как интеграции через Integration SDK (§12).
-- **Умный дом — на паузе** (с 11.10.2026); когда вернёмся — интеграция через Home Assistant.
-- **Уровни разрешений** — по промту §7: Read-only / Normal / Confirm / Blocked. Старая шкала
-  L0/L1/L2 из `docs/concept.md` больше не используется.
+- **15.10.2026, вариант B (Артем).** Приложение своё, мозг — Hermes Agent. Причина: Hermes уже
+  покрывает ~90 % ТЗ (цикл инструментов, Ollama и облако, одобрения опасных действий, computer-use
+  на Windows через UIAutomation, браузер, голос с русским STT/TTS, API со стримингом, cron, Telegram,
+  память, skills, MCP), 254k★, 100+ контрибьюторов, MIT. Писать это заново — месяцы.
+  Свой UI нужен, чтобы приложение было «своим», под наши сценарии, и ставилось одним файлом.
+- **Один установщик, без ручных шагов.** В пакет входят Tauri-приложение и всё, что нужно для первого
+  запуска. Hermes Agent разворачивается при первом запуске через его же стадийный протокол
+  `install.ps1 -Manifest / -Stage NAME -NonInteractive -Json` (так делает официальный Tauri-установщик
+  Hermes `apps/bootstrap-installer`, MIT — берём за образец). Ollama — как сайдкар из
+  `ollama-windows-amd64.zip` (CLI + библиотеки NVIDIA, без установщика), запускается нашим супервизором
+  с `OLLAMA_MODELS` на диске D:. Модели (LLM, Faster-Whisper, Piper) скачиваются в мастере первого
+  запуска после одного согласия пользователя с индикатором прогресса (промт §10, §11).
+  Допущение: первый запуск требует интернета; полностью офлайновый пакет (несколько ГБ) — позже.
+- **Стек оболочки — по промту §3:** Tauri 2.12 (стабильная; Tauri 3 только alpha), Rust для
+  супервизора процессов, bootstrap, конфигов, keyring и аудио; React 19 + TypeScript + Vite, Tailwind,
+  shadcn/ui, Zustand, TanStack Query. Отклонение от корпоративного стека (Nuxt) согласовано.
+- **Связь оболочки с Hermes** — локальный `api_server` Hermes (`127.0.0.1:8642`, Bearer-ключ, который
+  мы генерируем и храним в Windows Credential Manager через `keyring`): `POST /v1/runs` + SSE
+  `/events` (токены, прогресс инструментов, `approval.request`), `POST /v1/runs/{id}/approval`
+  (once/session/always/deny), `/stop`, Sessions API, `/v1/capabilities`. Голос: захват микрофона в
+  оболочке, транскрипция и озвучка через эндпоинты Hermes (`/api/audio/transcribe`,
+  `/api/audio/voice-config`, speech WebSocket — пути проверить по коду перед реализацией).
+- **Разрешения.** Hermes: `approvals.mode: manual` (не `smart`, не `off`), `approvals.deny` для своих
+  запретов, `HERMES_WRITE_SAFE_ROOT`. Наши уровни Read-only / Normal / Confirm / Blocked из промта §7
+  реализует **наш Python-плагин Hermes** на хуке `pre_tool_call` (block / modify / approve, fail-closed),
+  который ставится вместе с приложением. Подтверждения показывает наш UI. Системный промпт — не
+  механизм безопасности (промт §7).
+- **Модели.** Локально на RTX 3080 Ti (12 ГБ): старт — Qwen3.5 9B Q4 целиком в VRAM (`docs/models.md`,
+  строка ПК); Jarvis Deka (OpenAI-совместимый, 27B) — второй провайдер в сети Deka; облако (Anthropic,
+  OpenAI, Gemini) через провайдеры Hermes по явному выбору. Fallback-провайдеры Hermes — с согласия.
+- **Первый сценарий (MVP):** голосовой чат (push-to-talk по горячей клавише) + действия на этом ПК
+  через инструменты Hermes с подтверждениями в нашем UI. Сценарии Deka (FreeScout-триаж, Telegram,
+  cron) — переносятся из `archive/hermes-agent/skills` и `config` почти без правок, этап 7.
+- **Mac mini M4** — Hermes там заморожен (служба не трогается); позже возможная macOS-сборка.
+- **Умный дом** — на паузе; при возврате через плагин Home Assistant из каталога Hermes.
+- Отклонения от промта, принятые осознанно: агентный цикл на Python (Hermes), а не Rust; браузер —
+  встроенный browser tool Hermes (Chromium/CDP), а не Playwright; хранение сессий — SQLite Hermes,
+  наша SQLite только для настроек оболочки.
 
 ## Окружение (проверено 15.10.2026)
 
-**Основной ПК** (`ssh main-pc`, пользователь Koava, PowerShell; тот же LAN 192.168.229.x):
-- ASUS, Intel i5-14600KF (14C/20T), 32 ГБ ОЗУ, **RTX 3080 Ti 12 ГБ VRAM** (драйвер 617.42),
-  Windows 11 Pro build 26300, WebView2 155 есть (нужен Tauri).
-- Диски: C: 49 ГБ свободно (мало!), D: 3,5 ТБ свободно, E: 27 ГБ, F: 196 ГБ.
-  **Модели Ollama и тяжёлые кэши класть на D:** (`OLLAMA_MODELS=D:\ollama\models`).
-- Аудио: гарнитура HyperX Cloud II Core Wireless (микрофон + наушники), мониторы по HDMI.
-- Установлено: git 2.54, VS Code, .NET SDK 10.0.402 (поставлен 15.10 под C#-вариант, не нужен,
-  можно удалить). **Нет**: Node.js, Rust, MSVC, Ollama, Python — и ставить их на ПК не нужно (см. решения).
-- В SSH-сессии `winget` не в PATH — установщики (Ollama, сам Hermes) запускать по прямому пути.
-- Репозиторий на ПК не нужен: туда попадает только установщик из CI.
+**Основной ПК** (`ssh main-pc`, пользователь Koava, PowerShell; LAN 192.168.229.x):
+- ASUS, Intel i5-14600KF (14C/20T), 32 ГБ ОЗУ, **RTX 3080 Ti 12 ГБ VRAM** (драйвер 617.42 ≥ 551.61
+  для Ollama), Windows 11 Pro build 26300 (≥ 22H2), WebView2 155 есть.
+- Диски: C: 49 ГБ свободно (мало!), D: 3,5 ТБ свободно, E: 27 ГБ, F: 196 ГБ. Модели — на D:.
+- Аудио: гарнитура HyperX Cloud II Core Wireless (микрофон + наушники).
+- Установлено: git 2.54, VS Code, .NET SDK 10.0.402 (не нужен, можно удалить). Нет Node, Rust,
+  Python, Ollama, Hermes. В SSH-сессии `winget` не в PATH.
+- Hermes нативно на Windows ставится в `%LOCALAPPDATA%\hermes` (uv-managed Python 3.14, Git for
+  Windows bootstrap, cua-driver), gateway — задача Планировщика ONLOGON через `pythonw.exe`.
 
-**Эта машина (Linux, разработка и репозиторий):** Node 22, pnpm 9; Rust не установлен (поставить rustup
-и зависимости Tauri для Linux: webkit2gtk-4.1, libayatana-appindicator, librsvg). Tauri под Windows на
-Linux не кросс-компилируется: здесь — Linux-сборка для разработки UI, `tsc`, eslint, vitest, `cargo test`;
-`.exe`/`.msi` — GitHub Actions `tauri-apps/tauri-action` на windows-latest, проверка на ПК по SSH
-(установка, запуск, скриншот).
-
-**Mac mini M4** (`ssh mac`, 16 ГБ, macOS 26.3): Hermes заморожен; потенциальная macOS-цель для §19.
+**Эта машина (Linux, разработка):** Node 22, pnpm 9; Rust не установлен (поставить rustup +
+webkit2gtk-4.1, libayatana-appindicator, librsvg для Linux-сборки Tauri). Windows-сборка —
+GitHub Actions `tauri-action` на windows-latest; `.exe/.msi` проверяем на ПК по SSH.
 
 ## Правила работы в проекте
 
-- **Ничего не ставить на ПК Артема без его «ОК»**: установщики, модели, службы (15.10 Артем отклонил
-  автоустановку Ollama). Сначала список «что и куда», потом установка. Не скачивать большие модели
-  без согласия (промт §10, §11).
-- Правила промта §22 обязательны: работать проверяемыми этапами, после каждого — lint, typecheck,
-  тесты, сборка в доступном окружении; не выдавать мокап за рабочую функцию; чётко различать
-  реализовано / частично / запланировано; `docs/ROADMAP.md` держать актуальным.
-- Любое действие агента, которое меняет состояние (удаление, отправка, системные настройки,
-  команды, деньги) — уровень Confirm или Blocked, проверка в backend (Rust), не в промпте модели.
-- Секреты — только в системном хранилище или `private/` (в `.gitignore`); в коде — ссылки на
-  переменные окружения. Доступ к хостам — по SSH-ключам.
-- Язык общения с Артемом и UI — русский; код, имена инструментов, логи — английские.
+- **На ПК Артема ничего не ставить без его «ОК»** (15.10 отклонена автоустановка Ollama). Концепт B
+  предполагает, что наш установщик ставит Hermes и Ollama сам — но перед **первым** прогоном
+  установщика/бутстрапа на ПК сказать, что и куда ляжет, и дождаться согласия. Диагностика
+  (`Get-CimInstance`, версии, свободное место) — без спроса.
+- Правила промта §22: проверяемые этапы; после каждого — lint, typecheck, тесты, сборка; мокап не
+  выдавать за функцию; различать реализовано / частично / запланировано; `docs/ROADMAP.md` актуален.
+- Всё, что меняет состояние ПК (удаление, команды, системные настройки, отправка сообщений, деньги) —
+  Confirm или Blocked, проверка в Hermes-плагине и политике Hermes, не в промпте.
+- Секреты — Windows Credential Manager (`keyring`) или `.env` Hermes с правами только владельца;
+  `private/` в `.gitignore`. Доступ к хостам — по SSH-ключам.
+- Язык UI и общения — русский; код, имена инструментов, логи — английские.
 - Схемы для `docs/` — Mermaid через скил `/design-doc-mermaid`, исходники `.mmd` рядом.
-- Важные изменения фиксировать в Obsidian: `Projects/AI-Agent.md` и `Daily/`; ADR — `docs/decisions.md`.
+- Важное фиксировать в Obsidian (`Projects/AI-Agent.md`, `Daily/`), ADR — `docs/decisions.md`.
+- Коммитить и пушить в GitHub по ходу этапов (решение Артема 15.10).
 
 ## Структура репозитория
 
-Целевая — по промту §16 (`src/`, `src-tauri/`, `packages/`, `tests/`, `docs/`), корректировать по
-факту, пустые пакеты не создавать. Сейчас:
-- `Nexus_AI_Assistant_Claude_Code_Master_Prompt.md` — ТЗ (см. выше)
-- `docs/` — `decisions.md` (ADR, вести дальше), `models.md` (локальные модели; строка под 12 ГБ VRAM
-  добавлена), `concept.md` / `deka-scenarios.md` / `diagrams/` — **устаревшая концепция Hermes**,
-  оставлены как история; новые документы по промту: `ARCHITECTURE.md`, `SECURITY.md`,
-  `DEVELOPMENT.md`, `USER_GUIDE.md`, `ROADMAP.md`, `OPEN_SOURCE_RESEARCH.md`
-- `archive/hermes-agent/` — архив замороженного Hermes Agent: `config/` (конфиг, `dangerous-tools.md`),
-  `skills/` (helpdesk-triage, remote-hosts, voice-output), `scripts/` (install-mac.sh)
-- `private/` — ключи, реквизиты хостов (`mac.md` и др.); в git не включать
-
-## Рабочий процесс разработки
-
-1. Код пишется здесь, в `~/projects/ai-agent` (ярлык `~/dev/personal/ai-agent`), ветка `main`,
-   origin — GitHub `koavart-dotcom/hermes-assistant`. Коммитить и пушить по ходу этапов.
-2. Windows-сборка — GitHub Actions (`.github/workflows/`): на push в `main` — lint/typecheck/tests;
-   на тег `v*` — `tauri-action` собирает `.msi`/`.exe` (и позже `.dmg`) в GitHub Release.
-3. Проверка на ПК: скачать установщик из Release по SSH (`Invoke-WebRequest`), установить, запустить,
-   снять скриншот; результат проверять реально, не по логу сборки.
-4. Перед этапом 1: на этой машине поставить rustup и Linux-зависимости Tauri; на ПК — Ollama
-   (с моделью на D:, с «ОК» Артема) — это единственный внешний runtime приложения.
+Целевая (уточняется по ходу, пустые пакеты не создавать):
+- `src/` — React-оболочка: `features/{chat,approvals,voice,status,settings,setup}`, `services/`
+  (клиент api_server, SSE), `stores/`, `types/` (генерируются из Rust через ts-rs)
+- `src-tauri/` — Rust: `supervisor/` (gateway, ollama), `bootstrap/` (стадии install.ps1, Ollama zip,
+  модели), `hermes_config/` (config.yaml, .env, плагин), `audio/`, `secrets/`, `commands/`,
+  `capabilities/` (минимальные)
+- `hermes-plugins/hermes_permissions/` — Python-плагин Hermes (pre_tool_call, уровни разрешений) + тесты
+- `hermes-skills/` — наши skills для Hermes (из `archive/hermes-agent/skills` после переноса)
+- `docs/` — `ARCHITECTURE.md`, `ROADMAP.md`, `OPEN_SOURCE_RESEARCH.md`, `decisions.md`, `models.md`,
+  `diagrams/`; `concept.md`, `deka-scenarios.md` — история этапа Mac
+- `archive/hermes-agent/` — конфиг, skills, скрипты этапа Mac (11–14.10.2026)
+- `.github/workflows/` — CI (lint/typecheck/tests на push, сборка Windows на тег `v*`)
+- `private/` — реквизиты хостов, не в git
 
 ## Статус
 
-15.10.2026: концепт сменён на Hermes (Tauri, ПК Артема), Hermes Agent заморожен и убран в
-`archive/hermes-agent/`; репозиторий опубликован в GitHub (private).
-Кода приложения ещё нет. Следующий шаг — промт §23 и этап 1 (§20): краткая архитектура, ограниченное
-исследование 8 репозиториев (§15) → `docs/OPEN_SOURCE_RESEARCH.md`, `docs/ARCHITECTURE.md`,
-`docs/ROADMAP.md`, затем каркас Tauri + React + Rust с SQLite и CI.
-
-Решено 15.10.2026: имя — Hermes; git — GitHub koavart-dotcom; на ПК только приложение + Ollama.
-Открыто: модель для Ollama (предложение — Qwen3.5 9B Q4 как старт), момент установки Ollama на ПК
-(спросить перед этапом 2), слово-активация для голоса (в MVP push-to-talk по промту §10).
+15.10.2026: исследование завершено, выбран вариант B, кода оболочки ещё нет. Следующий шаг —
+`docs/ROADMAP.md` этап 1: каркас Tauri + React + Rust, CI, затем этап 2 — мастер первого запуска
+(бутстрап Hermes по стадийному протоколу, Ollama-сайдкар, загрузка моделей) и проверка на ПК.
+Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
+«jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
+(NSIS vs MSI) и размер первого скачивания.

@@ -1,0 +1,54 @@
+flowchart TB
+    subgraph U["Артем"]
+        direction LR
+        U1["Голос: гарнитура,<br/>push-to-talk по горячей клавише"]
+        U2["Текст в окне чата"]
+        U3["Окно подтверждения:<br/>разрешить / запретить"]
+    end
+    subgraph APP["Наше приложение Hermes (Tauri 2)"]
+        direction TB
+        UI["React-интерфейс:<br/>чат, подтверждения, голос,<br/>статус, настройки, мастер установки"]
+        RS["Rust-ядро:<br/>супервизор процессов, бутстрап,<br/>конфиг Hermes, аудио, keyring"]
+        UI <--> RS
+    end
+    subgraph HA["Hermes Agent (Python, бандл)"]
+        direction TB
+        API["api_server 127.0.0.1:8642<br/>runs + SSE-события + approval"]
+        CORE["Ядро: цикл инструментов,<br/>сессии, память, skills, cron"]
+        PERM["Наш плагин разрешений<br/>pre_tool_call: block / approve"]
+        TOOLS["Инструменты: терминал, файлы,<br/>computer-use, браузер, Telegram"]
+        VOICE["Голос: Faster-Whisper (ru),<br/>Piper TTS"]
+        API --> CORE --> PERM --> TOOLS
+        CORE --> VOICE
+    end
+    subgraph LLM["Модели"]
+        direction LR
+        OL["Ollama (сайдкар, RTX 3080 Ti)<br/>модели на D:"]
+        JD["Jarvis Deka<br/>(по сети, опционально)"]
+        CL["Облако: Anthropic / OpenAI<br/>(по явному выбору)"]
+    end
+    subgraph PC["Компьютер Артема"]
+        WIN["Приложения, файлы,<br/>экран, PowerShell"]
+    end
+    U1 --> UI
+    U2 --> UI
+    UI --> U3
+    RS -->|"HTTP + SSE, Bearer-ключ"| API
+    RS -.->|"запуск, остановка,<br/>обновление"| HA
+    RS -.->|"запуск, модели"| OL
+    CORE --> OL
+    CORE --> JD
+    CORE --> CL
+    TOOLS --> WIN
+    classDef user fill:#FFF4D6,stroke:#333,stroke-width:1px,color:#000
+    classDef app fill:#E8F1FB,stroke:#333,stroke-width:1px,color:#000
+    classDef hermes fill:#E6F4EA,stroke:#333,stroke-width:1px,color:#000
+    classDef model fill:#F3E8FD,stroke:#333,stroke-width:1px,color:#000
+    classDef pc fill:#F4F6F8,stroke:#333,stroke-width:1px,color:#000
+    classDef tier fill:#FFFFFF,stroke:#555,stroke-width:1px,color:#000
+    class U1,U2,U3 user
+    class UI,RS app
+    class API,CORE,PERM,TOOLS,VOICE hermes
+    class OL,JD,CL model
+    class WIN pc
+    class U,APP,HA,LLM,PC tier
