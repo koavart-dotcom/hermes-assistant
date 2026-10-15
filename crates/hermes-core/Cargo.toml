@@ -1,0 +1,23 @@
+[package]
+name = "hermes-core"
+description = "Core logic of the Hermes shell: Hermes Agent bootstrap, Ollama sidecar, config, gateway supervision"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+reqwest = { version = "0.13", features = ["json", "stream"] }
+futures-util = "0.3"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+keyring = { version = "4", features = ["windows-native", "apple-native", "linux-native"] }
+getrandom = "0.3"
+hex = "0.4"
+dirs = "7"
