@@ -115,9 +115,14 @@ GitHub Actions `tauri-action` на windows-latest; `.exe/.msi` проверяе�
 
 ## Статус
 
-15.10.2026: исследование завершено, выбран вариант B, кода оболочки ещё нет. Следующий шаг —
-`docs/ROADMAP.md` этап 1: каркас Tauri + React + Rust, CI, затем этап 2 — мастер первого запуска
-(бутстрап Hermes по стадийному протоколу, Ollama-сайдкар, загрузка моделей) и проверка на ПК.
+15.10.2026: вариант B выбран; этап 1 в работе — каркас написан (Tauri 2.12, React 19, TypeScript 6,
+Vite 8, Tailwind 4, shadcn/ui preset nova, Zustand, TanStack Query, react-router 8, vitest 5; Rust-крейт с
+командой `app_info` и ts-rs; CI: frontend + rust(ubuntu) + windows cargo check; release по тегу).
+Локально проходят lint/typecheck/test/build. **На этом сервере диск заполнен** (после чистки ~2 ГБ),
+Rust не установлен — Rust проверяется только в CI; `tsc -b` с project references (`tsconfig.app.json`,
+`tsconfig.node.json`), артефакты в `node_modules/.tmp`. Для shadcn CLI нужен алиас `@` в корневом
+`tsconfig.json`, иначе он пишет файлы в папку `@/`. Далее: зелёный CI → тег v0.1.0 → первый .exe на ПК
+→ этап 2 (мастер первого запуска).
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.
