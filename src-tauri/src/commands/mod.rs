@@ -7,7 +7,7 @@ use hermes_core::ollama::Ollama;
 use hermes_core::setup::{SetupOptions, SetupPlan};
 use hermes_core::status::StatusSnapshot;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 use ts_rs::TS;
 
