@@ -121,9 +121,16 @@ Vite 8, Tailwind 4, shadcn/ui preset nova, Zustand, TanStack Query, react-router
 Локально проходят lint/typecheck/test/build. **На этом сервере диск заполнен** (после чистки ~2 ГБ),
 Rust не установлен — Rust проверяется только в CI; `tsc -b` с project references (`tsconfig.app.json`,
 `tsconfig.node.json`), артефакты в `node_modules/.tmp`. Для shadcn CLI нужен алиас `@` в корневом
-`tsconfig.json`, иначе он пишет файлы в папку `@/`. CI зелёный, релиз **v0.1.0** опубликован как prerelease
-(https://github.com/koavart-dotcom/hermes-assistant/releases/tag/v0.1.0). Далее: установка на ПК с «ОК»
-Артема и скриншот → этап 2 (мастер первого запуска).
+`tsconfig.json`, иначе он пишет файлы в папку `@/`. Этап 1 закрыт: v0.1.0 установлен на ПК и открывается.
+**Этап 2 написан (v0.2.0)**: workspace `crates/hermes-core` (без Tauri: `bootstrap` — стадийный протокол
+install.ps1 v0.22.2 из `src-tauri/resources/hermes/` с pin commit; `ollama` — zip v0.40.5 → `D:\hermes\ollama`,
+`OLLAMA_MODELS=D:\hermes\models`, pull с прогрессом; `hermes_config` — `hermes config set` (model.*, approvals.mode
+manual, API_SERVER_*); `gateway` — `hermes gateway start/stop/install` + `/health` на 8642; `secrets` — keyring 3
+(Windows Credential Manager) с файловым фолбэком; `setup` — конвейер и `SetupPlan`), Tauri-команды
+(`setup_plan/setup_start/setup_cancel/status_snapshot/gateway_start/gateway_stop`, события `setup:event`),
+мастер «Установка» с согласием на скачивание и живой экран «Состояние». На сервере стоит rustup minimal
+(`~/.cargo/bin`, в PATH не добавлен): `cargo check/clippy -p hermes-core` работают локально, полные тесты и
+Tauri — в CI. Следующий шаг: первый прогон мастера на ПК Артема и починка по его логу.
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.
