@@ -60,8 +60,11 @@ impl Layout {
     }
 
     pub fn ollama_exe(&self) -> PathBuf {
-        self.ollama_dir
-            .join(if cfg!(windows) { "ollama.exe" } else { "ollama" })
+        self.ollama_dir.join(if cfg!(windows) {
+            "ollama.exe"
+        } else {
+            "ollama"
+        })
     }
 
     /// Marker written by install.ps1's `complete` stage.
@@ -99,7 +102,10 @@ mod tests {
         assert_eq!(l.install_dir, Path::new("/lad/hermes/hermes-agent"));
         assert_eq!(l.hermes_bin, Path::new("/lad/hermes/bin"));
         assert_eq!(l.models_dir, Path::new("/data/models"));
-        assert_eq!(l.bootstrap_marker(), Path::new("/lad/hermes/hermes-agent/.hermes-bootstrap-complete"));
+        assert_eq!(
+            l.bootstrap_marker(),
+            Path::new("/lad/hermes/hermes-agent/.hermes-bootstrap-complete")
+        );
         assert_eq!(l.env_file(), Path::new("/lad/hermes/.env"));
     }
 }

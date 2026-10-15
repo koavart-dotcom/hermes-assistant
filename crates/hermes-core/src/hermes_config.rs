@@ -35,8 +35,17 @@ pub async fn apply(
     cancel: &CancellationToken,
 ) -> Result<()> {
     for (key, value) in settings(model, api_key) {
-        let shown = if key.contains("KEY") { "***".to_string() } else { value.clone() };
-        emit(events, SetupEvent::Log { line: format!("hermes config set {key} {shown}") });
+        let shown = if key.contains("KEY") {
+            "***".to_string()
+        } else {
+            value.clone()
+        };
+        emit(
+            events,
+            SetupEvent::Log {
+                line: format!("hermes config set {key} {shown}"),
+            },
+        );
         run_hermes(layout, &["config", "set", &key, &value], None, cancel).await?;
     }
     Ok(())

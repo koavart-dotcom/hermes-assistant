@@ -72,7 +72,9 @@ pub fn parse_manifest(lines: &[String]) -> Result<Manifest> {
 pub fn parse_frame(lines: &[String], stage: &str) -> Result<StageFrame> {
     last_json::<StageFrame>(lines)
         .filter(|f| f.stage == stage)
-        .ok_or_else(|| CoreError::Protocol(format!("stage `{stage}` produced no JSON result frame")))
+        .ok_or_else(|| {
+            CoreError::Protocol(format!("stage `{stage}` produced no JSON result frame"))
+        })
 }
 
 pub struct Installer {
@@ -93,12 +95,19 @@ impl Installer {
         cmd
     }
 
-    pub async fn manifest(&self, events: &EventSender, cancel: &CancellationToken) -> Result<Manifest> {
+    pub async fn manifest(
+        &self,
+        events: &EventSender,
+        cancel: &CancellationToken,
+    ) -> Result<Manifest> {
         let mut cmd = self.base_command();
         cmd.arg("-Manifest");
         let out = run_streaming(cmd, "install", Some(events), cancel).await?;
         if !out.success {
-            return Err(CoreError::Protocol(format!("install.ps1 -Manifest failed: {}", out.status)));
+            return Err(CoreError::Protocol(format!(
+                "install.ps1 -Manifest failed: {}",
+                out.status
+            )));
         }
         parse_manifest(&out.stdout)
     }
@@ -108,38 +117,66 @@ impl Installer {
     /// Hermes itself afterwards.
     pub async fn install(&self, events: &EventSender, cancel: &CancellationToken) -> Result<()> {
         if !cfg!(windows) {
-            return Err(CoreError::Other("Hermes bootstrap is implemented for Windows only".into()));
+            return Err(CoreError::Other(
+                "Hermes bootstrap is implemented for Windows only".into(),
+            ));
         }
         let manifest = self.manifest(events, cancel).await?;
         for stage in &manifest.stages {
             if stage.needs_user_input {
-                emit(events, SetupEvent::StageFinished {
-                    stage: stage.name.clone(),
-                    ok: true,
-                    skipped: true,
-                    reason: Some("configured by Hermes shell".into()),
-                });
+                emit(
+                    events,
+                    SetupEvent::StageFinished {
+                        stage: stage.name.clone(),
+                        ok: true,
+                        skipped: true,
+                        reason: Some("configured by Hermes shell".into()),
+                    },
+                );
                 continue;
             }
-            emit(events, SetupEvent::StageStarted { stage: stage.name.clone(), title: stage.title.clone() });
+            emit(
+                events,
+                SetupEvent::StageStarted {
+                    stage: stage.name.clone(),
+                    title: stage.title.clone(),
+                },
+            );
             let mut cmd = self.base_command();
-            cmd.args(["-Stage", &stage.name, "-NonInteractive", "-Json", "-Commit", &self.pin.commit]);
+            cmd.args([
+                "-Stage",
+                &stage.name,
+                "-NonInteractive",
+                "-Json",
+                "-Commit",
+                &self.pin.commit,
+            ]);
             let out = run_streaming(cmd, "install", Some(events), cancel).await?;
-            let frame = parse_frame(&out.stdout, &stage.name).or_else(|e| {
-                if out.success { Err(e) } else {
-                    Err(CoreError::StageFailed { stage: stage.name.clone(), reason: out.status.clone() })
+            let frame = parse_frame(&out.stdout, &stage.name).map_err(|e| {
+                if out.success {
+                    e
+                } else {
+                    CoreError::StageFailed {
+                        stage: stage.name.clone(),
+                        reason: out.status.clone(),
+                    }
                 }
             })?;
-            emit(events, SetupEvent::StageFinished {
-                stage: frame.stage.clone(),
-                ok: frame.ok,
-                skipped: frame.skipped,
-                reason: frame.reason.clone(),
-            });
+            emit(
+                events,
+                SetupEvent::StageFinished {
+                    stage: frame.stage.clone(),
+                    ok: frame.ok,
+                    skipped: frame.skipped,
+                    reason: frame.reason.clone(),
+                },
+            );
             if !frame.ok {
                 return Err(CoreError::StageFailed {
                     stage: stage.name.clone(),
-                    reason: frame.reason.unwrap_or_else(|| "installer reported failure".into()),
+                    reason: frame
+                        .reason
+                        .unwrap_or_else(|| "installer reported failure".into()),
                 });
             }
         }

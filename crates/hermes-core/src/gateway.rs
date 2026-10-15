@@ -19,7 +19,11 @@ pub struct Gateway {
 
 impl Gateway {
     pub fn new(layout: Layout, api_key: Option<String>) -> Gateway {
-        Gateway { layout, client: reqwest::Client::new(), api_key }
+        Gateway {
+            layout,
+            client: reqwest::Client::new(),
+            api_key,
+        }
     }
 
     pub fn base_url(&self) -> String {
@@ -35,10 +39,17 @@ impl Gateway {
         if let Some(k) = &self.api_key {
             req = req.bearer_auth(k);
         }
-        req.send().await.map(|r| r.status().is_success()).unwrap_or(false)
+        req.send()
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false)
     }
 
-    pub async fn start(&self, events: Option<&EventSender>, cancel: &CancellationToken) -> Result<()> {
+    pub async fn start(
+        &self,
+        events: Option<&EventSender>,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         if self.is_healthy().await {
             return Ok(());
         }
@@ -46,13 +57,21 @@ impl Gateway {
         self.wait_healthy(Duration::from_secs(90), cancel).await
     }
 
-    pub async fn stop(&self, events: Option<&EventSender>, cancel: &CancellationToken) -> Result<()> {
+    pub async fn stop(
+        &self,
+        events: Option<&EventSender>,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         run_hermes(&self.layout, &["gateway", "stop"], events, cancel).await?;
         Ok(())
     }
 
     /// Register the gateway to start at login (Scheduled Task, no admin).
-    pub async fn install_autostart(&self, events: Option<&EventSender>, cancel: &CancellationToken) -> Result<()> {
+    pub async fn install_autostart(
+        &self,
+        events: Option<&EventSender>,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         run_hermes(&self.layout, &["gateway", "install"], events, cancel).await?;
         Ok(())
     }
@@ -68,6 +87,9 @@ impl Gateway {
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        Err(CoreError::Other(format!("gateway did not answer on {} within {timeout:?}", self.base_url())))
+        Err(CoreError::Other(format!(
+            "gateway did not answer on {} within {timeout:?}",
+            self.base_url()
+        )))
     }
 }

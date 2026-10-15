@@ -21,7 +21,9 @@ pub const OLLAMA_ZIP_BYTES: u64 = 1_471_226_485;
 pub const OLLAMA_HOST: &str = "127.0.0.1:11434";
 
 pub fn zip_url() -> String {
-    format!("https://github.com/ollama/ollama/releases/download/{OLLAMA_VERSION}/ollama-windows-amd64.zip")
+    format!(
+        "https://github.com/ollama/ollama/releases/download/{OLLAMA_VERSION}/ollama-windows-amd64.zip"
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +57,10 @@ struct PullLine {
 
 impl Ollama {
     pub fn new(layout: Layout) -> Ollama {
-        Ollama { layout, client: reqwest::Client::new() }
+        Ollama {
+            layout,
+            client: reqwest::Client::new(),
+        }
     }
 
     pub fn base_url(&self) -> String {
@@ -77,25 +82,47 @@ impl Ollama {
     }
 
     /// Download the release zip (if not already present) and extract it.
-    pub async fn ensure_installed(&self, events: &EventSender, cancel: &CancellationToken) -> Result<()> {
+    pub async fn ensure_installed(
+        &self,
+        events: &EventSender,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         if self.is_installed() {
-            emit(events, SetupEvent::Log { line: "Ollama already extracted".into() });
+            emit(
+                events,
+                SetupEvent::Log {
+                    line: "Ollama already extracted".into(),
+                },
+            );
             return Ok(());
         }
         tokio::fs::create_dir_all(&self.layout.downloads_dir).await?;
         tokio::fs::create_dir_all(&self.layout.ollama_dir).await?;
-        let archive = self.layout.downloads_dir.join(format!("ollama-windows-amd64-{OLLAMA_VERSION}.zip"));
-        let complete = tokio::fs::metadata(&archive).await.map(|m| m.len() == OLLAMA_ZIP_BYTES).unwrap_or(false);
+        let archive = self
+            .layout
+            .downloads_dir
+            .join(format!("ollama-windows-amd64-{OLLAMA_VERSION}.zip"));
+        let complete = tokio::fs::metadata(&archive)
+            .await
+            .map(|m| m.len() == OLLAMA_ZIP_BYTES)
+            .unwrap_or(false);
         if !complete {
             download(&self.client, &zip_url(), &archive, "ollama", events, cancel).await?;
         }
-        emit(events, SetupEvent::Log { line: format!("Extracting {}", archive.display()) });
+        emit(
+            events,
+            SetupEvent::Log {
+                line: format!("Extracting {}", archive.display()),
+            },
+        );
         let dest = self.layout.ollama_dir.clone();
         tokio::task::spawn_blocking(move || extract_zip(&archive, &dest))
             .await
             .map_err(|e| CoreError::Other(e.to_string()))??;
         if !self.is_installed() {
-            return Err(CoreError::Other("ollama.exe not found after extraction".into()));
+            return Err(CoreError::Other(
+                "ollama.exe not found after extraction".into(),
+            ));
         }
         Ok(())
     }
@@ -124,7 +151,9 @@ impl Ollama {
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
-        Err(CoreError::Other("ollama serve did not become ready in 20 s".into()))
+        Err(CoreError::Other(
+            "ollama serve did not become ready in 20 s".into(),
+        ))
     }
 
     pub async fn models(&self) -> Result<Vec<String>> {
@@ -142,11 +171,19 @@ impl Ollama {
 
     pub async fn has_model(&self, tag: &str) -> bool {
         let want = normalize_tag(tag);
-        self.models().await.map(|m| m.iter().any(|n| normalize_tag(n) == want)).unwrap_or(false)
+        self.models()
+            .await
+            .map(|m| m.iter().any(|n| normalize_tag(n) == want))
+            .unwrap_or(false)
     }
 
     /// `POST /api/pull` with streaming NDJSON progress.
-    pub async fn pull(&self, tag: &str, events: &EventSender, cancel: &CancellationToken) -> Result<()> {
+    pub async fn pull(
+        &self,
+        tag: &str,
+        events: &EventSender,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
         let resp = self
             .client
             .post(format!("{}/api/pull", self.base_url()))
@@ -165,17 +202,33 @@ impl Ollama {
             buf.extend_from_slice(&chunk);
             while let Some(pos) = buf.iter().position(|b| *b == b'\n') {
                 let line: Vec<u8> = buf.drain(..=pos).collect();
-                let Ok(text) = std::str::from_utf8(&line) else { continue };
-                let Ok(p) = serde_json::from_str::<PullLine>(text.trim()) else { continue };
+                let Ok(text) = std::str::from_utf8(&line) else {
+                    continue;
+                };
+                let Ok(p) = serde_json::from_str::<PullLine>(text.trim()) else {
+                    continue;
+                };
                 if let Some(err) = p.error {
                     return Err(CoreError::Other(format!("ollama pull: {err}")));
                 }
                 if p.status != last_status {
                     last_status = p.status.clone();
-                    emit(events, SetupEvent::Log { line: format!("ollama: {}", p.status) });
+                    emit(
+                        events,
+                        SetupEvent::Log {
+                            line: format!("ollama: {}", p.status),
+                        },
+                    );
                 }
                 if let (Some(total), Some(done)) = (p.total, p.completed) {
-                    emit(events, SetupEvent::Progress { label: format!("model {tag}"), received: done, total: Some(total) });
+                    emit(
+                        events,
+                        SetupEvent::Progress {
+                            label: format!("model {tag}"),
+                            received: done,
+                            total: Some(total),
+                        },
+                    );
                 }
             }
         }
@@ -216,13 +269,27 @@ pub async fn download(
         received += chunk.len() as u64;
         if received - last_report >= 1_000_000 {
             last_report = received;
-            emit(events, SetupEvent::Progress { label: label.to_string(), received, total });
+            emit(
+                events,
+                SetupEvent::Progress {
+                    label: label.to_string(),
+                    received,
+                    total,
+                },
+            );
         }
     }
     file.flush().await?;
     drop(file);
     tokio::fs::rename(&tmp, dest).await?;
-    emit(events, SetupEvent::Progress { label: label.to_string(), received, total: Some(total.unwrap_or(received)) });
+    emit(
+        events,
+        SetupEvent::Progress {
+            label: label.to_string(),
+            received,
+            total: Some(total.unwrap_or(received)),
+        },
+    );
     Ok(())
 }
 
@@ -232,7 +299,9 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> Result<()> {
     let mut zip = zip::ZipArchive::new(file)?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let Some(rel) = entry.enclosed_name() else { continue };
+        let Some(rel) = entry.enclosed_name() else {
+            continue;
+        };
         let out: PathBuf = dest.join(rel);
         if entry.is_dir() {
             std::fs::create_dir_all(&out)?;

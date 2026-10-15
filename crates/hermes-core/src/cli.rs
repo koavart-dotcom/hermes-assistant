@@ -46,11 +46,19 @@ pub async fn run_streaming(
     cancel: &CancellationToken,
 ) -> Result<Output> {
     hide_console(&mut cmd);
-    cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     cmd.kill_on_drop(true);
     let mut child = cmd.spawn()?;
-    let stdout = child.stdout.take().ok_or_else(|| CoreError::Other("no stdout".into()))?;
-    let stderr = child.stderr.take().ok_or_else(|| CoreError::Other("no stderr".into()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| CoreError::Other("no stdout".into()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| CoreError::Other("no stderr".into()))?;
 
     let mut out_lines = BufReader::new(stdout).lines();
     let mut err_lines = BufReader::new(stderr).lines();
@@ -116,7 +124,11 @@ pub async fn run_hermes(
 
 /// `.cmd` launchers on Windows must go through `cmd.exe /c`.
 pub fn command_for(program: &Path) -> Command {
-    if cfg!(windows) && program.extension().is_some_and(|e| e.eq_ignore_ascii_case("cmd")) {
+    if cfg!(windows)
+        && program
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("cmd"))
+    {
         let mut c = Command::new("cmd.exe");
         c.arg("/c").arg(program);
         c
@@ -129,7 +141,13 @@ pub fn command_for(program: &Path) -> Command {
 /// expects; the caller appends script arguments.
 pub fn powershell_script(script: &Path) -> Command {
     let mut c = Command::new("powershell.exe");
-    c.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
+    c.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+    ]);
     c.arg(script);
     c
 }

@@ -20,7 +20,10 @@ fn fallback_path(layout: &Layout) -> std::path::PathBuf {
 }
 
 fn read_fallback(path: &Path) -> Option<String> {
-    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn write_fallback(path: &Path, key: &str) -> Result<()> {
@@ -38,7 +41,9 @@ pub fn api_server_key(layout: &Layout) -> Result<String> {
         Ok(entry) => match entry.get_password() {
             Ok(k) if !k.is_empty() => Ok(k),
             Ok(_) | Err(keyring::Error::NoEntry) => {
-                let key = read_fallback(&fallback).map(Ok).unwrap_or_else(generate_key)?;
+                let key = read_fallback(&fallback)
+                    .map(Ok)
+                    .unwrap_or_else(generate_key)?;
                 if entry.set_password(&key).is_err() {
                     write_fallback(&fallback, &key)?;
                 }

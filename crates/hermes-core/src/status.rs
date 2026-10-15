@@ -20,9 +20,18 @@ pub struct StatusSnapshot {
     pub models_dir: String,
 }
 
-pub async fn snapshot(layout: &Layout, hermes_version: &str, ollama: &Ollama, gateway: &Gateway) -> Result<StatusSnapshot> {
+pub async fn snapshot(
+    layout: &Layout,
+    hermes_version: &str,
+    ollama: &Ollama,
+    gateway: &Gateway,
+) -> Result<StatusSnapshot> {
     let ollama_running = ollama.is_running().await;
-    let models = if ollama_running { ollama.models().await.unwrap_or_default() } else { Vec::new() };
+    let models = if ollama_running {
+        ollama.models().await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     Ok(StatusSnapshot {
         hermes_installed: layout.bootstrap_marker().exists(),
         hermes_version: hermes_version.to_string(),

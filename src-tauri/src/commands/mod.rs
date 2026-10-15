@@ -49,7 +49,11 @@ pub async fn app_info(app: AppHandle, state: State<'_, AppState>) -> Result<AppI
     } else {
         HermesState::Stopped
     };
-    Ok(AppInfo { name: pkg.name.clone(), version: pkg.version.to_string(), hermes_state })
+    Ok(AppInfo {
+        name: pkg.name.clone(),
+        version: pkg.version.to_string(),
+        hermes_state,
+    })
 }
 
 #[tauri::command]
@@ -58,13 +62,19 @@ pub fn setup_plan(state: State<'_, AppState>) -> SetupPlan {
 }
 
 #[tauri::command]
-pub fn setup_start(app: AppHandle, state: State<'_, AppState>, options: SetupOptions) -> Result<(), String> {
+pub fn setup_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    options: SetupOptions,
+) -> Result<(), String> {
     let mut slot = state.setup.lock().map_err(err)?;
     if slot.is_some() {
         return Err("setup is already running".into());
     }
     let cancel = CancellationToken::new();
-    *slot = Some(RunningSetup { cancel: cancel.clone() });
+    *slot = Some(RunningSetup {
+        cancel: cancel.clone(),
+    });
     drop(slot);
 
     let ctx = state.ctx.clone();
@@ -146,6 +156,9 @@ mod tests {
 
     #[test]
     fn hermes_state_serializes_snake_case() {
-        assert_eq!(serde_json::to_string(&HermesState::NotInstalled).unwrap(), "\"not_installed\"");
+        assert_eq!(
+            serde_json::to_string(&HermesState::NotInstalled).unwrap(),
+            "\"not_installed\""
+        );
     }
 }

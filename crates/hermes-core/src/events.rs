@@ -24,9 +24,18 @@ pub enum SetupEvent {
     /// A Hermes install.ps1 stage started.
     StageStarted { stage: String, title: String },
     /// A Hermes install.ps1 stage finished.
-    StageFinished { stage: String, ok: bool, skipped: bool, reason: Option<String> },
+    StageFinished {
+        stage: String,
+        ok: bool,
+        skipped: bool,
+        reason: Option<String>,
+    },
     /// Byte-level progress of a download or model pull.
-    Progress { label: String, received: u64, total: Option<u64> },
+    Progress {
+        label: String,
+        received: u64,
+        total: Option<u64>,
+    },
     /// A raw line from a child process, for the log pane.
     Log { line: String },
     /// A top-level step finished.

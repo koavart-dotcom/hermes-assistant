@@ -111,7 +111,12 @@ pub async fn run(
             Ok(child)
         }
         Err(e) => {
-            emit(events, SetupEvent::Failed { message: e.to_string() });
+            emit(
+                events,
+                SetupEvent::Failed {
+                    message: e.to_string(),
+                },
+            );
             Err(e)
         }
     }
@@ -124,49 +129,115 @@ async fn run_inner(
     cancel: &CancellationToken,
 ) -> Result<Option<tokio::process::Child>> {
     if !opts.consent {
-        return Err(crate::CoreError::Other("downloads were not approved".into()));
+        return Err(crate::CoreError::Other(
+            "downloads were not approved".into(),
+        ));
     }
 
     // 1. Hermes Agent.
-    emit(events, SetupEvent::StepStarted { step: SetupStep::Hermes });
-    let installer = Installer { script: ctx.script.clone(), pin: ctx.pin.clone(), layout: ctx.layout.clone() };
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Hermes,
+        },
+    );
+    let installer = Installer {
+        script: ctx.script.clone(),
+        pin: ctx.pin.clone(),
+        layout: ctx.layout.clone(),
+    };
     if installer.is_installed() {
-        emit(events, SetupEvent::Log { line: "Hermes Agent already installed".into() });
+        emit(
+            events,
+            SetupEvent::Log {
+                line: "Hermes Agent already installed".into(),
+            },
+        );
     } else {
         installer.install(events, cancel).await?;
     }
-    emit(events, SetupEvent::StepFinished { step: SetupStep::Hermes });
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Hermes,
+        },
+    );
 
     // 2. Configuration + API key.
-    emit(events, SetupEvent::StepStarted { step: SetupStep::Config });
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Config,
+        },
+    );
     let api_key = secrets::api_server_key(&ctx.layout)?;
     hermes_config::apply(&ctx.layout, &opts.model, &api_key, events, cancel).await?;
-    emit(events, SetupEvent::StepFinished { step: SetupStep::Config });
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Config,
+        },
+    );
 
     // 3. Ollama sidecar.
-    emit(events, SetupEvent::StepStarted { step: SetupStep::Ollama });
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Ollama,
+        },
+    );
     let ollama = Ollama::new(ctx.layout.clone());
     ollama.ensure_installed(events, cancel).await?;
     let child = ollama.start().await?;
-    emit(events, SetupEvent::StepFinished { step: SetupStep::Ollama });
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Ollama,
+        },
+    );
 
     // 4. Model.
-    emit(events, SetupEvent::StepStarted { step: SetupStep::Model });
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Model,
+        },
+    );
     if ollama.has_model(&opts.model).await {
-        emit(events, SetupEvent::Log { line: format!("model {} already present", opts.model) });
+        emit(
+            events,
+            SetupEvent::Log {
+                line: format!("model {} already present", opts.model),
+            },
+        );
     } else {
         ollama.pull(&opts.model, events, cancel).await?;
     }
-    emit(events, SetupEvent::StepFinished { step: SetupStep::Model });
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Model,
+        },
+    );
 
     // 5. Gateway.
-    emit(events, SetupEvent::StepStarted { step: SetupStep::Gateway });
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Gateway,
+        },
+    );
     let gateway = Gateway::new(ctx.layout.clone(), Some(api_key));
     if opts.autostart {
         gateway.install_autostart(Some(events), cancel).await?;
     }
     gateway.start(Some(events), cancel).await?;
-    emit(events, SetupEvent::StepFinished { step: SetupStep::Gateway });
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Gateway,
+        },
+    );
 
     Ok(child)
 }
@@ -180,7 +251,10 @@ mod tests {
         let plan = SetupContext {
             layout: Layout::from_roots(std::path::Path::new("/lad"), std::path::Path::new("/data")),
             script: PathBuf::from("install.ps1"),
-            pin: Pin { version: "v0".into(), commit: "abc".into() },
+            pin: Pin {
+                version: "v0".into(),
+                commit: "abc".into(),
+            },
         }
         .plan();
         assert!(plan.models.iter().any(|m| m.tag == plan.default_model));
