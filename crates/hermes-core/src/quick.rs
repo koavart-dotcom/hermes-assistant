@@ -602,8 +602,14 @@ mod platform {
         // Fast path first: a program name Windows resolves itself (PATH or
         // the App Paths registry — chrome, code, notepad, calc, ...), which
         // is instant. Only then search Start Menu shortcuts (slow, ~1-3 s).
+        // 1) Already running with a window? Restore it (if minimized) and bring
+        //    it to the front instead of opening another instance.
+        // 2) Else start by program name, 3) else via a Start Menu shortcut.
         let script = format!(
             "$names = @({list}); \
+             Add-Type -Namespace HA -Name Win -MemberDefinition '[DllImport(\"user32.dll\")] public static extern bool ShowWindowAsync(IntPtr h, int c); [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr h); [DllImport(\"user32.dll\")] public static extern bool IsIconic(IntPtr h);'; \
+             foreach ($n in $names) {{ $p = Get-Process -Name $n -ErrorAction SilentlyContinue | Where-Object {{ $_.MainWindowHandle -ne 0 }} | Select-Object -First 1; \
+               if ($p) {{ $h = $p.MainWindowHandle; if ([HA.Win]::IsIconic($h)) {{ [HA.Win]::ShowWindowAsync($h, 9) | Out-Null }}; [HA.Win]::SetForegroundWindow($h) | Out-Null; exit 0 }} }}; \
              foreach ($n in $names) {{ try {{ Start-Process -FilePath $n -ErrorAction Stop; exit 0 }} catch {{}} }}; \
              $dirs = @(\"$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\", \"$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\"); \
              $lnk = Get-ChildItem $dirs -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | Where-Object {{ $b = $_.BaseName; $names | Where-Object {{ $b -like \"*$_*\" }} }} | Select-Object -First 1; \
