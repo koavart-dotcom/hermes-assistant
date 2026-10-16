@@ -132,3 +132,28 @@ qwen3:14b) контекст и VRAM проверять отдельно; при 
 **Последствия.** Любая модель в мастере должна оцениваться с учётом 64k контекста, а не только
 размера весов (`docs/models.md`). Изменение env требует перезапуска `ollama serve` — приложение
 делает это само при старте следующей версии (процесс принадлежит приложению).
+
+## 2026-10-16 — Этап 4: уровни разрешений как плагин Hermes на `pre_tool_call`
+
+**Контекст.** Промт §7 требует уровни Read-only / Normal / Confirm / Blocked, проверяемые не в
+системном промпте. Hermes v0.22.2 даёт хук `pre_tool_call(tool_name, args, task_id)` с ответами
+`block` / `approve` (уходит в штатный approval gate, который api_server доставляет нашему чату как
+`approval.request`, а «always» запоминается по `rule_key`) / `modify`. Встроенная проверка Hermes
+покрывает только опасные shell-команды; `approvals.unattended_mode: deny` не мешает — для api_server
+с клиентом, умеющим отвечать, запрос доходит.
+
+**Решение.** Плагин `hermes-plugins/hermes_permissions` (stdlib, `plugin.yaml` + `__init__.py`):
+терминал — чёрный список регулярок (shutdown, format, diskpart, `rm -rf /`, `reg delete HKLM`,
+`curl | sh`…) → block; команды только на чтение (`ls`, `dir`, `Get-ChildItem`, `git status`,
+`reg query`… без перенаправлений) → allow; остальное → confirm с `rule_key = hp:terminal:<программа>`;
+`write_file`/`patch` — allow внутри корней (профиль, D:\, HERMES_HOME), confirm вне, block для
+`.ssh`, `.env`, credential-хранилищ; остальные инструменты по таблице (browser_cdp/vault — block,
+execute_code/computer_use/process_manage — confirm, чтение и поиск — allow), неизвестные — confirm.
+Переопределение — `$HERMES_HOME/hermes_permissions.json`, читается на каждом вызове; журнал —
+`hermes_permissions.log` (JSON lines). Ошибка плагина → confirm (fail-closed). Плагин едет в ресурсах
+приложения, копируется мастером и при каждом старте (`plugins_ensure`), включается `hermes plugins
+enable`, при изменении файлов gateway перезапускается.
+
+**Последствия.** Безопасность не зависит от промпта и от модели. Цена — лишние подтверждения для
+новых инструментов (default confirm), регулируется политикой. `HERMES_WRITE_SAFE_ROOT` как второй
+рубеж — позже, когда станет ясно, какие папки реально нужны.

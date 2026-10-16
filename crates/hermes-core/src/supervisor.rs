@@ -223,6 +223,33 @@ impl Supervisor {
         Ok(())
     }
 
+    /// At app start: make sure the bundled permission plugin is installed
+    /// and enabled; when its files changed and the gateway is running,
+    /// restart the gateway so it loads the new version. No-op before the
+    /// first setup (Hermes not installed).
+    pub async fn plugins_ensure(&self) -> Result<()> {
+        let layout = &self.ctx.layout;
+        if !layout.bootstrap_marker().exists() {
+            return Ok(());
+        }
+        let src = self
+            .ctx
+            .plugins_dir
+            .join(crate::plugins::PERMISSIONS_PLUGIN);
+        let cancel = CancellationToken::new();
+        let changed =
+            crate::plugins::install_permissions_plugin(layout, &src, None, &cancel).await?;
+        if changed {
+            let gateway = self.gateway();
+            if gateway.is_healthy().await {
+                log::info!("permission plugin updated; restarting the Hermes gateway");
+                gateway.stop(None, &cancel).await?;
+                gateway.start(None, &cancel).await?;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn gateway_stop(&self) -> Result<()> {
         Gateway::new(self.ctx.layout.clone(), None)
             .stop(None, &CancellationToken::new())
@@ -269,6 +296,7 @@ mod tests {
         Supervisor::new(Arc::new(SetupContext {
             layout: Layout::from_roots(Path::new("/lad"), Path::new("/data")),
             script: PathBuf::from("install.ps1"),
+            plugins_dir: PathBuf::from("plugins"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

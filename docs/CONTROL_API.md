@@ -49,6 +49,12 @@ Agent на ПК Артема, не трогая окно приложения. �
 Хранится в Credential Manager (фолбэк — файл `secrets/github_token`). Сама проверка и установка
 обновления — в окне (баннер «Доступна версия …» → «Обновить»), Tauri-команды `update_check`/`update_install`.
 
+**Разрешения (с v0.6.0, этап 4):** `GET /permissions/log?tail=200` — журнал решений плагина
+`hermes_permissions` (`{ts, tool, action: allow|confirm|block, reason, preview, task_id}`);
+`GET`/`PUT /permissions/policy` — переопределение политики `hermes_permissions.json`
+(`{roots: [...], tools: {name: allow|confirm|block|roots|terminal}, default, terminal: {block: [regex], allow: [cmd],
+default}}`); плагин читает файл при каждом вызове инструмента, перезапуск не нужен.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

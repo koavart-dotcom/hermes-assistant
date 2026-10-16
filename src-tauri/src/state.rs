@@ -25,6 +25,9 @@ impl AppState {
             .path()
             .resolve("resources/hermes/pin.json", BaseDirectory::Resource)?;
         let pin: Pin = serde_json::from_str(&std::fs::read_to_string(&pin_path)?)?;
+        let plugins_dir: PathBuf = app
+            .path()
+            .resolve("resources/hermes-plugins", BaseDirectory::Resource)?;
         let layout = Layout::detect();
         log::info!("hermes home: {}", layout.hermes_home.display());
         log::info!("models dir: {}", layout.models_dir.display());
@@ -34,6 +37,7 @@ impl AppState {
                 layout,
                 script,
                 pin,
+                plugins_dir,
             })),
         })
     }

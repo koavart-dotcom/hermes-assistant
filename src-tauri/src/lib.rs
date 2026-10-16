@@ -81,6 +81,14 @@ pub fn run() {
                 }
             });
 
+            // Keep the bundled permission plugin installed and enabled.
+            let sup_plugins = sup.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = sup_plugins.plugins_ensure().await {
+                    log::warn!("plugin refresh failed: {e}");
+                }
+            });
+
             // Control API on loopback (reached remotely through an SSH tunnel).
             match control::token(&sup.ctx.layout) {
                 Ok(token) => {
@@ -119,6 +127,9 @@ pub fn run() {
             commands::chat_approve,
             update::update_check,
             update::update_install,
+            commands::permissions_log,
+            commands::permissions_policy_get,
+            commands::permissions_policy_set,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -32,7 +32,21 @@ export const api = {
 
   updateCheck: () => invoke<UpdateInfo>("update_check"),
   updateInstall: () => invoke<void>("update_install"),
+
+  permissionsLog: (tail = 200) => invoke<PermissionRecord[]>("permissions_log", { tail }),
+  permissionsPolicyGet: () => invoke<Record<string, unknown>>("permissions_policy_get"),
+  permissionsPolicySet: (policy: Record<string, unknown>) => invoke<void>("permissions_policy_set", { policy }),
 };
+
+/** One decision line of the hermes_permissions plugin (hermes_permissions.log). */
+export interface PermissionRecord {
+  ts: number;
+  tool: string;
+  action: "allow" | "confirm" | "block";
+  reason: string;
+  preview: string;
+  task_id: string;
+}
 
 export const UPDATE_EVENT = "update:progress";
 

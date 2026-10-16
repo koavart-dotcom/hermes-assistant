@@ -1,0 +1,9 @@
+name: hermes_permissions
+version: 0.1.0
+description: >
+  Hermes Assistant permission levels for every tool call (Read-only / Normal /
+  Confirm / Blocked): destructive commands are blocked, risky ones go through
+  the human-approval gate shown in the Hermes Assistant window, read-only ones
+  pass. Every decision is appended to hermes_permissions.log in HERMES_HOME.
+provides_hooks:
+  - pre_tool_call

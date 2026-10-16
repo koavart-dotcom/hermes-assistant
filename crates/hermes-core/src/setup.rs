@@ -76,6 +76,8 @@ pub struct SetupContext {
     pub layout: Layout,
     pub script: PathBuf,
     pub pin: Pin,
+    /// Bundled Hermes plugins (`resources/hermes-plugins/`), one dir per plugin.
+    pub plugins_dir: PathBuf,
 }
 
 impl SetupContext {
@@ -183,6 +185,14 @@ async fn run_inner(
         cancel,
     )
     .await?;
+    // Our permission plugin (pre_tool_call levels) ships with the app.
+    crate::plugins::install_permissions_plugin(
+        &ctx.layout,
+        &ctx.plugins_dir.join(crate::plugins::PERMISSIONS_PLUGIN),
+        Some(events),
+        cancel,
+    )
+    .await?;
     emit(
         events,
         SetupEvent::StepFinished {
@@ -261,6 +271,7 @@ mod tests {
         let plan = SetupContext {
             layout: Layout::from_roots(std::path::Path::new("/lad"), std::path::Path::new("/data")),
             script: PathBuf::from("install.ps1"),
+            plugins_dir: PathBuf::from("plugins"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

@@ -165,6 +165,48 @@ pub async fn chat_approve(
         .map_err(err)
 }
 
+// ----------------------------------------------------------- permissions --
+
+/// Last decisions of the permission plugin (JSON objects, newest last).
+#[tauri::command]
+pub fn permissions_log(state: State<'_, AppState>, tail: Option<usize>) -> Result<Vec<serde_json::Value>, String> {
+    let path = hermes_core::plugins::log_path(&state.supervisor.ctx.layout);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path).map_err(err)?;
+    let lines: Vec<&str> = text.lines().collect();
+    let n = tail.unwrap_or(200).clamp(1, 5000);
+    let start = lines.len().saturating_sub(n);
+    Ok(lines[start..]
+        .iter()
+        .filter_map(|l| serde_json::from_str(l).ok())
+        .collect())
+}
+
+#[tauri::command]
+pub fn permissions_policy_get(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let path = hermes_core::plugins::policy_path(&state.supervisor.ctx.layout);
+    if !path.exists() {
+        return Ok(serde_json::json!({}));
+    }
+    let text = std::fs::read_to_string(&path).map_err(err)?;
+    serde_json::from_str(&text).map_err(err)
+}
+
+#[tauri::command]
+pub fn permissions_policy_set(
+    state: State<'_, AppState>,
+    policy: serde_json::Value,
+) -> Result<(), String> {
+    if !policy.is_object() {
+        return Err("policy must be a JSON object".into());
+    }
+    let path = hermes_core::plugins::policy_path(&state.supervisor.ctx.layout);
+    let text = serde_json::to_string_pretty(&policy).map_err(err)?;
+    hermes_core::control::write_with_backup(&path, &text).map_err(err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

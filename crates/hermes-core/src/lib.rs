@@ -12,6 +12,7 @@ pub mod gateway;
 pub mod hermes_config;
 pub mod ollama;
 pub mod paths;
+pub mod plugins;
 pub mod secrets;
 pub mod setup;
 pub mod status;

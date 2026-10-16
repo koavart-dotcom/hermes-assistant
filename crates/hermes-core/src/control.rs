@@ -104,6 +104,8 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/chat/approve", post(chat_approve))
         .route("/chat/events", get(chat_events))
         .route("/update/token", axum::routing::put(update_token))
+        .route("/permissions/log", get(permissions_log))
+        .route("/permissions/policy", get(permissions_policy_get).put(permissions_policy_put))
         .layer(middleware::from_fn_with_state(ctl.clone(), auth));
     let api = Router::new().route("/health", get(health)).merge(protected);
     Router::new().nest(BASE_PATH, api).with_state(ctl)
@@ -526,6 +528,42 @@ async fn update_token(
     ))
 }
 
+/// Last `tail` decisions of the permission plugin (JSON lines, newest last).
+async fn permissions_log(State(ctl): State<Arc<Ctl>>, Query(q): Query<Tail>) -> ApiResult<Json<Vec<Value>>> {
+    let path = crate::plugins::log_path(&ctl.sup.ctx.layout);
+    if !path.exists() {
+        return Ok(Json(Vec::new()));
+    }
+    let text = std::fs::read_to_string(&path).map_err(CoreError::from)?;
+    let tail = tail_lines(&text, q.tail.clamp(1, 5000));
+    Ok(Json(
+        tail.lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .collect(),
+    ))
+}
+
+/// The user's policy override (`hermes_permissions.json`), `{}` when absent.
+async fn permissions_policy_get(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
+    let path = crate::plugins::policy_path(&ctl.sup.ctx.layout);
+    if !path.exists() {
+        return Ok(Json(json!({})));
+    }
+    let text = std::fs::read_to_string(&path).map_err(CoreError::from)?;
+    Ok(Json(serde_json::from_str(&text).map_err(CoreError::from)?))
+}
+
+/// Replace the policy override; the plugin re-reads it on every tool call.
+async fn permissions_policy_put(State(ctl): State<Arc<Ctl>>, Json(policy): Json<Value>) -> ApiResult<Json<Value>> {
+    if !policy.is_object() {
+        return Err(bad_request("policy must be a JSON object"));
+    }
+    let path = crate::plugins::policy_path(&ctl.sup.ctx.layout);
+    let text = serde_json::to_string_pretty(&policy).map_err(CoreError::from)?;
+    write_with_backup(&path, &text)?;
+    Ok(Json(json!({ "ok": true, "path": path.display().to_string() })))
+}
+
 #[derive(Serialize)]
 struct ChatEvents {
     events: Vec<ChatStamped>,
@@ -609,6 +647,7 @@ mod tests {
         let sup = Supervisor::new(Arc::new(crate::setup::SetupContext {
             layout,
             script: PathBuf::from("install.ps1"),
+            plugins_dir: PathBuf::from("plugins"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),
