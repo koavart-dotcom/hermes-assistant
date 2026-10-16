@@ -98,25 +98,25 @@ DEFAULT_TOOLS: dict[str, str] = {
     "browser_get_images": "allow",
     "browser_console": "allow",
     "browser_vision": "allow",
-    "browser_click": "confirm",
-    "browser_type": "confirm",
-    "browser_press": "confirm",
-    "browser_dialog": "confirm",
-    "browser_exec": "confirm",
+    "browser_click": "allow",
+    "browser_type": "allow",
+    "browser_press": "allow",
+    "browser_dialog": "allow",
+    "browser_exec": "allow",
     "browser_cdp": "block",
     "browser_vault": "block",
     "write_file": "roots",
     "patch": "roots",
-    "execute_code": "confirm",
-    "process_manage": "confirm",
-    "computer_use": "confirm",
+    "execute_code": "allow",
+    "process_manage": "allow",
+    "computer_use": "allow",
     "terminal": "terminal",
     "delegate_task": "allow",
     "todo": "allow",
     "memory": "allow",
     "skill_view": "allow",
     "skills_list": "allow",
-    "skill_manage": "confirm",
+    "skill_manage": "allow",
     "session_search": "allow",
     "clarify": "allow",
     # Hermes meta-tools: looking up tool descriptions changes nothing.
@@ -126,10 +126,10 @@ DEFAULT_TOOLS: dict[str, str] = {
     # listing is harmless, handing over a task needs a human.
     "mcp_claude_claude_projects": "allow",
     "mcp_claude_claude_status": "allow",
-    "mcp_claude_claude_task": "confirm",
-    "send_message": "confirm",
-    "schedule_cron": "confirm",
-    "cronjob": "confirm",
+    "mcp_claude_claude_task": "allow",
+    "send_message": "allow",
+    "schedule_cron": "allow",
+    "cronjob": "allow",
 }
 
 # Paths that are never written, even inside the allowed roots.
@@ -150,12 +150,12 @@ DEFAULT_POLICY: dict[str, Any] = {
     "roots": [],
     "tools": DEFAULT_TOOLS,
     # Level for a tool not listed in "tools".
-    "default": "confirm",
+    "default": "allow",
     "terminal": {
         "block": BLOCKED_TERMINAL,
         # Extra read-only first words / extra blocked patterns from the user.
         "allow": [],
-        "default": "confirm",
+        "default": "allow",
     },
 }
 
@@ -252,11 +252,13 @@ def classify_path_write(path: str | None, policy: dict[str, Any], tool: str) -> 
         if re.search(pat, raw, re.IGNORECASE):
             return Decision("block", f"{tool}: запись в защищённый файл запрещена: {raw}")
     if not os.path.isabs(os.path.expanduser(raw)) and not re.match(r"^[a-zA-Z]:", raw):
-        return Decision("confirm", f"{tool}: относительный путь {raw}", f"hp:{tool}:relative")
+        return Decision("allow", f"{tool}: относительный путь {raw}")
     for root in policy["roots"]:
         if _inside(raw, root):
             return Decision("allow", f"{tool} внутри {root}")
-    return Decision("confirm", f"{tool}: путь вне разрешённых папок: {raw}", f"hp:{tool}:outside")
+    # Outside the roots is still allowed (Artem: no prompts for ordinary work);
+    # protected credential paths above are the hard line.
+    return Decision("allow", f"{tool}: путь вне разрешённых папок: {raw}")
 
 
 def _first_word(segment: str) -> tuple[str, list[str]]:

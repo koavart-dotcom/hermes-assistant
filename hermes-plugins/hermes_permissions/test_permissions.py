@@ -48,7 +48,9 @@ class TerminalTests(unittest.TestCase):
         ]:
             self.allow(cmd)
 
-    def test_mutating_commands_need_confirmation(self):
+    def test_mutating_commands_run_without_prompt_by_default(self):
+        # Artem's rule (16.10.2026): ordinary work never asks; only the block
+        # list stops things. A user policy can switch terminal back to confirm.
         for cmd in [
             "echo hi > out.txt",
             "mkdir new-folder",
@@ -61,11 +63,14 @@ class TerminalTests(unittest.TestCase):
             "notepad.exe",
             "taskkill /IM chrome.exe /F",
         ]:
-            self.confirm(cmd)
+            self.allow(cmd)
 
-    def test_confirm_rule_key_groups_by_program(self):
-        d = hp.classify("terminal", {"command": "del old.txt"}, self.p)
+    def test_user_policy_can_require_confirmation_with_rule_key(self):
+        p = policy(terminal={"default": "confirm"})
+        d = hp.classify("terminal", {"command": "del old.txt"}, p)
+        self.assertEqual(d.action, "confirm")
         self.assertEqual(d.rule_key, "hp:terminal:del")
+        self.assertEqual(hp.classify("terminal", {"command": "dir"}, p).action, "allow")
 
     def test_destructive_commands_are_blocked(self):
         for cmd in [
@@ -101,10 +106,8 @@ class FileTests(unittest.TestCase):
         inside = "C:\\Users\\Koava\\OneDrive\\Desktop\\test.txt" if os.name == "nt" else "/home/koava/Desktop/test.txt"
         outside = "C:\\Windows\\win.ini" if os.name == "nt" else "/etc/hosts"
         self.assertEqual(hp.classify("write_file", {"path": inside, "content": "x"}, p).action, "allow")
-        d = hp.classify("write_file", {"path": outside, "content": "x"}, p)
-        self.assertEqual(d.action, "confirm")
-        self.assertEqual(d.rule_key, "hp:write_file:outside")
-        self.assertEqual(hp.classify("patch", {"path": "relative.txt"}, p).action, "confirm")
+        self.assertEqual(hp.classify("write_file", {"path": outside, "content": "x"}, p).action, "allow")
+        self.assertEqual(hp.classify("patch", {"path": "relative.txt"}, p).action, "allow")
 
     def test_protected_paths_blocked_even_inside_roots(self):
         p = policy(roots=["C:\\Users\\Koava"] if os.name == "nt" else ["/home/koava"])
@@ -121,8 +124,9 @@ class LevelTests(unittest.TestCase):
     def test_tool_levels_and_default(self):
         p = policy()
         self.assertEqual(hp.classify("browser_cdp", {}, p).action, "block")
-        self.assertEqual(hp.classify("execute_code", {"code": "print(1)"}, p).action, "confirm")
-        self.assertEqual(hp.classify("some_new_tool", {}, p).action, "confirm")
+        self.assertEqual(hp.classify("browser_vault", {}, p).action, "block")
+        self.assertEqual(hp.classify("execute_code", {"code": "print(1)"}, p).action, "allow")
+        self.assertEqual(hp.classify("some_new_tool", {}, p).action, "allow")
         p2 = policy(tools={"some_new_tool": "allow", "execute_code": "block"})
         self.assertEqual(hp.classify("some_new_tool", {}, p2).action, "allow")
         self.assertEqual(hp.classify("execute_code", {}, p2).action, "block")
@@ -132,7 +136,7 @@ class LevelTests(unittest.TestCase):
             home = Path(d)
             (home / hp.POLICY_FILE).write_text("{not json", encoding="utf-8")
             p = hp.load_policy(home)
-        self.assertEqual(p["default"], "confirm")
+        self.assertEqual(p["default"], "allow")
         self.assertTrue(p["roots"])
 
 
@@ -140,6 +144,7 @@ class HookTests(unittest.TestCase):
     def test_hook_returns_directives_and_logs(self):
         with tempfile.TemporaryDirectory() as d:
             home = Path(d)
+            (home / hp.POLICY_FILE).write_text(json.dumps({"terminal": {"default": "confirm"}}), encoding="utf-8")
             hook = hp.make_hook(home)
             self.assertIsNone(hook(tool_name="read_file", args={"path": "x"}, task_id="t1"))
             blocked = hook(tool_name="terminal", args={"command": "shutdown /s"}, task_id="t1")
