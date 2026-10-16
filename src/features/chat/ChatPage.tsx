@@ -9,6 +9,7 @@ import { api, isTauri, type ApprovalChoice } from "@/services/tauri";
 import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
+import type { QuickMatch } from "@/types/generated/QuickMatch";
 
 const EMPTY_TURNS: Turn[] = [];
 
@@ -34,8 +35,9 @@ export function ChatPage() {
   const runId = useChatStore((s) => (s.activeId ? (s.runs[s.activeId] ?? null) : null));
   const approval = useChatStore((s) => (s.activeId ? (s.approvals[s.activeId] ?? null) : null));
   const error = useChatStore((s) => s.error);
-  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, clearApproval, setError } =
+  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, addAssistantTurn, clearApproval, setError } =
     useChatStore.getState();
+  const [pendingQuick, setPendingQuick] = useState<{ sessionId: string; match: QuickMatch } | null>(null);
 
   const info = useQuery({ queryKey: ["app_info"], queryFn: api.appInfo, enabled: isTauri(), refetchInterval: 10_000 });
   const gatewayUp = info.data?.hermes_state === "running";
@@ -98,13 +100,24 @@ export function ChatPage() {
       }
       addUserTurn(sessionId, text);
       setDraft("");
+      // Quick command first: runs locally in milliseconds, the model is not involved.
+      const quick = await api.quickMatch(text);
+      if (quick) {
+        if (quick.needs_confirm) {
+          setPendingQuick({ sessionId, match: quick });
+          return;
+        }
+        const r = await api.quickRun(quick.id, false);
+        addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
+        return;
+      }
       await api.chatSend(sessionId, text);
     } catch (e) {
       setError(errorText(e));
     } finally {
       setBusy(false);
     }
-  }, [draft, busy, activeId, upsertSession, setActive, addUserTurn, setError]);
+  }, [draft, busy, activeId, upsertSession, setActive, addUserTurn, addAssistantTurn, setError]);
 
   const stop = useCallback(() => {
     if (activeId) api.chatStop(activeId).catch((e) => setError(errorText(e)));
@@ -217,6 +230,29 @@ export function ChatPage() {
                 <TurnView key={i} turn={t} />
               ))}
               {approval ? <ApprovalCard approval={approval} onDecide={decide} /> : null}
+              {pendingQuick && pendingQuick.sessionId === activeId ? (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm" role="dialog" aria-label="Подтверждение команды">
+                  <p className="font-medium">Выполнить «{pendingQuick.match.name}»?</p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const q = pendingQuick;
+                        setPendingQuick(null);
+                        api
+                          .quickRun(q.match.id, true)
+                          .then((r) => addAssistantTurn(q.sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined)))
+                          .catch((e) => setError(errorText(e)));
+                      }}
+                    >
+                      Да, выполнить
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setPendingQuick(null)}>
+                      Отмена
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               <div ref={bottomRef} />
             </div>
           )}

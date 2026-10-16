@@ -42,6 +42,8 @@ interface ChatState {
   setActive: (id: string | null) => void;
   setHistory: (sessionId: string, messages: ChatMessage[]) => void;
   addUserTurn: (sessionId: string, text: string) => void;
+  /** A finished assistant turn produced locally (quick command), no streaming. */
+  addAssistantTurn: (sessionId: string, text: string, error?: string) => void;
   apply: (sessionId: string, event: ChatEvent) => void;
   clearApproval: (sessionId: string) => void;
   setError: (error: string | null) => void;
@@ -87,6 +89,13 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       turns: { ...s.turns, [sessionId]: [...(s.turns[sessionId] ?? []), { role: "user", content: text }] },
       error: null,
+    })),
+  addAssistantTurn: (sessionId, text, error) =>
+    set((s) => ({
+      turns: {
+        ...s.turns,
+        [sessionId]: [...(s.turns[sessionId] ?? []), { role: "assistant", content: text, streaming: false, error }],
+      },
     })),
   setError: (error) => set({ error }),
   clearApproval: (sessionId) => set((s) => ({ approvals: { ...s.approvals, [sessionId]: null } })),

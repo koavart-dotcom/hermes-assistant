@@ -588,13 +588,15 @@ mod platform {
             .map(|n| format!("'{}'", q(n)))
             .collect::<Vec<_>>()
             .join(",");
-        // Find a Start Menu shortcut whose name contains one of the names
-        // (all-users and current user), else try it as a program name.
+        // Fast path first: a program name Windows resolves itself (PATH or
+        // the App Paths registry — chrome, code, notepad, calc, ...), which
+        // is instant. Only then search Start Menu shortcuts (slow, ~1-3 s).
         let script = format!(
             "$names = @({list}); \
+             foreach ($n in $names) {{ try {{ Start-Process -FilePath $n -ErrorAction Stop; exit 0 }} catch {{}} }}; \
              $dirs = @(\"$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\", \"$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\"); \
              $lnk = Get-ChildItem $dirs -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | Where-Object {{ $b = $_.BaseName; $names | Where-Object {{ $b -like \"*$_*\" }} }} | Select-Object -First 1; \
-             if ($lnk) {{ Start-Process -FilePath $lnk.FullName }} else {{ Start-Process -FilePath $names[0] }}"
+             if ($lnk) {{ Start-Process -FilePath $lnk.FullName }} else {{ exit 1 }}"
         );
         ps(&script).await
     }
