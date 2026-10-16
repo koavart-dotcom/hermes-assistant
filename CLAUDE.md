@@ -66,7 +66,9 @@
 
 ## Окружение (проверено 15.10.2026)
 
-**Основной ПК** (`ssh main-pc`, пользователь Koava, PowerShell; LAN 192.168.229.x):
+**Основной ПК** (`ssh main-pc`, PowerShell; LAN 192.168.229.x). **По SSH заходим как пользователь
+`claude`**, а интерактивный пользователь, под которым стоит приложение, — **Koava**: `$env:LOCALAPPDATA`
+в SSH-сессии указывает на профиль `claude`, поэтому пути писать явно: `C:\Users\Koava\AppData\Local\...`.
 - ASUS, Intel i5-14600KF (14C/20T), 32 ГБ ОЗУ, **RTX 3080 Ti 12 ГБ VRAM** (драйвер 617.42 ≥ 551.61
   для Ollama), Windows 11 Pro build 26300 (≥ 22H2), WebView2 155 есть.
 - Диски: C: 49 ГБ свободно (мало!), D: 3,5 ТБ свободно, E: 27 ГБ, F: 196 ГБ. Модели — на D:.
@@ -75,6 +77,9 @@
   Python, Ollama, Hermes. В SSH-сессии `winget` не в PATH.
 - Hermes нативно на Windows ставится в `%LOCALAPPDATA%\hermes` (uv-managed Python 3.14, Git for
   Windows bootstrap, cua-driver), gateway — задача Планировщика ONLOGON через `pythonw.exe`.
+- Приложение (NSIS, currentUser) — `%LOCALAPPDATA%\Hermes Assistant\hermes-assistant.exe`; данные и логи
+  оболочки — `%LOCALAPPDATA%\ua.koavart.hermes`. Не называть продукт «Hermes»: папка совпала бы с домом
+  Hermes Agent (ADR 16.10.2026).
 
 **Эта машина (Linux, разработка):** Node 22, pnpm 9; Rust не установлен (поставить rustup +
 webkit2gtk-4.1, libayatana-appindicator, librsvg для Linux-сборки Tauri). Windows-сборка —

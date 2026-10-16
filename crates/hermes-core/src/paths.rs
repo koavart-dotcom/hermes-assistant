@@ -3,6 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
+/// Bundle identifier of the shell (`tauri.conf.json` → `identifier`); Tauri
+/// derives its per-app data folders from it.
+pub const APP_IDENTIFIER: &str = "ua.koavart.hermes";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layout {
     /// `%LOCALAPPDATA%\hermes` — Hermes Agent home (config, sessions, logs).
@@ -11,7 +15,11 @@ pub struct Layout {
     pub install_dir: PathBuf,
     /// `<hermes_home>\bin` — CLI launchers published by install.ps1.
     pub hermes_bin: PathBuf,
-    /// Data of our shell (settings, logs, secrets fallback).
+    /// Data of our shell (settings, logs, secrets fallback):
+    /// `%LOCALAPPDATA%\ua.koavart.hermes`, the same folder Tauri uses for
+    /// `app_local_data_dir`. Must never coincide with `hermes_home`: the app
+    /// itself installs to `%LOCALAPPDATA%\Hermes Assistant`, and Windows paths
+    /// are case-insensitive, so `Hermes` and `hermes` would be one folder.
     pub app_data_dir: PathBuf,
     /// Ollama binaries extracted from the release zip.
     pub ollama_dir: PathBuf,
@@ -29,7 +37,7 @@ impl Layout {
             install_dir: hermes_home.join("hermes-agent"),
             hermes_bin: hermes_home.join("bin"),
             hermes_home,
-            app_data_dir: local_app_data.join("Hermes"),
+            app_data_dir: local_app_data.join(APP_IDENTIFIER),
             ollama_dir: data_root.join("ollama"),
             models_dir: data_root.join("models"),
             downloads_dir: data_root.join("downloads"),
@@ -40,7 +48,8 @@ impl Layout {
     ///
     /// Windows: `%LOCALAPPDATA%` for Hermes and the shell; `D:\hermes` for
     /// Ollama and models when drive D: exists (the main PC has 3.5 TB free
-    /// there and almost nothing on C:), otherwise `%LOCALAPPDATA%\Hermes\data`.
+    /// there and almost nothing on C:), otherwise
+    /// `%LOCALAPPDATA%\ua.koavart.hermes\data`.
     pub fn detect() -> Layout {
         let local = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
         let data_root = preferred_data_root(&local);
@@ -88,7 +97,7 @@ fn preferred_data_root(local_app_data: &Path) -> PathBuf {
             return d.join("hermes");
         }
     }
-    local_app_data.join("Hermes").join("data")
+    local_app_data.join(APP_IDENTIFIER).join("data")
 }
 
 #[cfg(test)]
@@ -107,5 +116,24 @@ mod tests {
             Path::new("/lad/hermes/hermes-agent/.hermes-bootstrap-complete")
         );
         assert_eq!(l.env_file(), Path::new("/lad/hermes/.env"));
+        assert_eq!(l.app_data_dir, Path::new("/lad/ua.koavart.hermes"));
+    }
+
+    /// Windows paths are case-insensitive: the shell's data folder (and the
+    /// NSIS install dir, `%LOCALAPPDATA%\Hermes Assistant`) must not collapse
+    /// into Hermes Agent's home `%LOCALAPPDATA%\hermes`.
+    #[test]
+    fn shell_data_dir_never_collides_with_hermes_home() {
+        let l = Layout::from_roots(Path::new("/lad"), Path::new("/data"));
+        let home = l.hermes_home.to_string_lossy().to_lowercase();
+        let app = l.app_data_dir.to_string_lossy().to_lowercase();
+        assert_ne!(home, app);
+        assert_ne!(home, "/lad/hermes assistant");
+        assert_ne!(
+            preferred_data_root(Path::new("/lad"))
+                .to_string_lossy()
+                .to_lowercase(),
+            "/lad/hermes/data"
+        );
     }
 }

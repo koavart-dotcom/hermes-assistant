@@ -62,3 +62,20 @@ C — всё с нуля по промту.
 Браузер — встроенный Hermes (CDP), не Playwright. Зависимость от темпа релизов Hermes: версию фиксируем
 (pin commit в бутстрапе), обновления — через наш мастер. Первый запуск требует интернета (скачивание
 Hermes-окружения, Ollama и моделей с согласия). Образец бутстрапа — `apps/bootstrap-installer` Hermes (Tauri, MIT).
+
+## 2026-10-16 — Продукт «Hermes Assistant»: папка приложения отделена от дома Hermes Agent
+
+**Контекст.** NSIS Tauri ставит приложение в `%LOCALAPPDATA%\<productName>`, а Hermes Agent живёт в
+`%LOCALAPPDATA%\hermes` (`HERMES_HOME`, checkout `hermes-agent\`, `bin\`, `config.yaml`, `.env`).
+С productName «Hermes» это одна и та же папка (пути Windows не различают регистр), туда же попадал бы
+и фолбэк данных оболочки `app_data_dir`. Замечено 16.10 при проверке ПК перед первым прогоном мастера.
+
+**Решение.** productName → **«Hermes Assistant»** (каталог `%LOCALAPPDATA%\Hermes Assistant`),
+`mainBinaryName` → `hermes-assistant`; данные оболочки → `%LOCALAPPDATA%\ua.koavart.hermes`
+(как `app_local_data_dir` Tauri, там же логи). Дом Hermes Agent не трогаем — его CLI, `hermes doctor`,
+`hermes update` и задача Планировщика рассчитаны на стандартный путь. Старая запись «Hermes» 0.1.0/0.2.0
+удаляется хуком NSIS `NSIS_HOOK_PREINSTALL` (`src-tauri/windows/hooks.nsi`): запускает старый
+`uninstall.exe /S`, если он есть. Имя окна и помощника остаётся «Hermes».
+
+**Последствия.** Установщик называется `Hermes Assistant_<v>_x64-setup.exe`; ключ реестра удаления —
+новый. Тест `shell_data_dir_never_collides_with_hermes_home` охраняет разделение путей.

@@ -74,7 +74,7 @@
 | Настройки оболочки (окно, горячая клавиша, устройства, тема) | JSON/SQLite в `%APPDATA%\Hermes` |
 | `API_SERVER_KEY`, ключи облачных провайдеров | Windows Credential Manager (`keyring`); Hermes читает ключи из своего `.env`, который пишет наш Rust |
 | Модели | `D:\hermes\models` (Ollama), кэш Hermes для STT/TTS |
-| Логи | `%APPDATA%\Hermes\logs` (оболочка), `%LOCALAPPDATA%\hermes\logs` (Hermes) |
+| Логи | `%LOCALAPPDATA%\ua.koavart.hermes\logs` (оболочка), `%LOCALAPPDATA%\hermes\logs` (Hermes) |
 
 ## 5. Безопасность
 
