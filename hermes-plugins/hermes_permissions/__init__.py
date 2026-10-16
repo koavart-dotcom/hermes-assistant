@@ -349,18 +349,22 @@ def make_hook(home: Path | None = None):
             decision = classify(tool_name, args, load_policy(home))
         except Exception as exc:  # noqa: BLE001 — fail closed
             decision = Decision("confirm", f"hermes_permissions: внутренняя ошибка ({exc})", "hp:error")
+        preview = _preview(tool_name, args)
         _log(home, {
             "ts": time.time(),
             "tool": tool_name,
             "action": decision.action,
             "reason": decision.reason,
-            "preview": _preview(tool_name, args),
+            "preview": preview,
             "task_id": task_id or "",
         })
+        # The approval card in Hermes Assistant shows this message: include
+        # what exactly is about to run, not only the rule name.
+        message = f"{decision.reason} — {preview}" if preview else decision.reason
         if decision.action == "block":
-            return {"action": "block", "message": decision.reason}
+            return {"action": "block", "message": message}
         if decision.action == "confirm":
-            out: dict[str, Any] = {"action": "approve", "message": decision.reason}
+            out: dict[str, Any] = {"action": "approve", "message": message}
             if decision.rule_key:
                 out["rule_key"] = decision.rule_key
             return out
