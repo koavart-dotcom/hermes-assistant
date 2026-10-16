@@ -308,8 +308,18 @@ impl Ollama {
             return Ok(());
         }
         let exe = self.layout.ollama_exe().display().to_string();
+        // `ollama serve` spawns `lib\ollama\llama-server.exe` runners that
+        // survive their parent and keep the model in VRAM; the first restart
+        // on the PC left three of them and the next load failed (5 GB free
+        // of 12). Kill everything that runs from our ollama_dir.
+        let dir = self
+            .layout
+            .ollama_dir
+            .display()
+            .to_string()
+            .replace('\'', "''");
         let script = format!(
-            "Get-Process ollama -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }} | Stop-Process -Force"
+            "Get-Process ollama,llama-server -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' -or ($_.Path -and $_.Path.StartsWith('{dir}')) }} | Stop-Process -Force"
         );
         let mut cmd = Command::new("powershell.exe");
         cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script])
