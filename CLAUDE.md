@@ -163,7 +163,17 @@ v0.5.2 — `OLLAMA_CONTEXT_LENGTH=65536` (при 4096 Hermes-промпт ~14k �
 инструменты; теперь `terminal`/`search_files` работают из чата) + перезапуск сайдкара при старте приложения.
 Факты ПК: рабочий стол Koava — `C:\Users\Koava\OneDrive\Desktop`; приложение не в автозагрузке (gateway — да).
 v0.5.3: репозиторий публичный, **обновление по кнопке проверено (0.5.2 → 0.5.3)**, автозапуск приложения через
-ключ Run. Открыто: Markdown в ответах, кнопка «Проверить обновления» в настройках, затем этап 4.
+ключ Run. v0.5.4 — Markdown + «Проверить обновления». **Этап 4 закрыт (v0.6.x)**: плагин `hermes_permissions`
+проверен на ПК (read-only → без вопроса, execute_code → карточка, once принято). **Этап 5 (v0.7.x)**: голос через
+веб-сервер Hermes (`hermes dashboard` на 8644, токен), Whisper small ru локально, озвучка **Piper** `ru_RU-dmitri-medium`
+(Edge TTS → 403, Microsoft закрыл эндпоинт); круг TTS→STT проверен через API; микрофон в окне не проверен.
+**Этап 6 (v0.8.0, в работе)**: быстрые команды без модели (`hermes-core::quick`, пак
+`hermes-quick-commands/default.ru.json`); источник идей — дерево команд Luxify Assistant с ПК Артема
+(`private/luxify/`, **не публиковать**: репозиторий публичный); голосовые реакции — клипы Jarvis из Luxify
+(`assets\Voices\Jarvis`, импорт в `voice-pack/` после ОК Артема). Для api_server отключены toolsets
+delegation/connections/skills/tts (`hermes tools disable <ts> --platform api_server`), промпт ~14k токенов →
+меньше; `hermes prompt-size` меряет CLI, не api_server. Открыто: голос Джарвиса для произвольного текста
+(XTTS v2 как `tts.provider: command`), глобальная горячая клавиша, Deka-сценарии (этап 7).
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.
