@@ -1,0 +1,144 @@
+//! Voice side of the [`Supervisor`]: the Hermes web server as a supervised
+//! child, one-off dependency setup (streamed through the setup event log),
+//! transcription and speech synthesis for the UI and the control API.
+
+use std::future::Future;
+use std::sync::Arc;
+
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+
+use crate::events::SetupEvent;
+use crate::supervisor::Supervisor;
+use crate::voice::{VoiceServer, VoiceStatus};
+use crate::{CoreError, Result};
+
+impl Supervisor {
+    pub fn voice_server(&self) -> Result<VoiceServer> {
+        VoiceServer::new(self.ctx.layout.clone())
+    }
+
+    pub async fn voice_status(&self) -> Result<VoiceStatus> {
+        let vs = self.voice_server()?;
+        let settings = crate::voice::settings();
+        let get = |k: &str| {
+            settings
+                .iter()
+                .find(|(key, _)| key == k)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_default()
+        };
+        Ok(VoiceStatus {
+            hermes_installed: self.ctx.layout.bootstrap_marker().exists(),
+            deps_ready: vs.deps_ready(),
+            server_running: vs.is_running().await,
+            stt_provider: get("stt.provider"),
+            tts_provider: get("tts.provider"),
+            tts_voice: get("tts.edge.voice"),
+        })
+    }
+
+    pub fn voice_setup_running(&self) -> bool {
+        self.voice_setup
+            .lock()
+            .map(|s| s.is_some())
+            .unwrap_or_else(|e| e.into_inner().is_some())
+    }
+
+    /// Install voice dependencies and configure Hermes, then start the web
+    /// server. Progress goes to the setup event stream (`record`), so the UI
+    /// and `hermesctl events` show it. Returns the future for the caller to
+    /// spawn.
+    pub fn voice_setup(self: &Arc<Self>) -> Result<impl Future<Output = ()> + Send + 'static> {
+        if !self.ctx.layout.bootstrap_marker().exists() {
+            return Err(CoreError::Other("Hermes is not installed yet".into()));
+        }
+        let cancel = {
+            let mut slot = self.voice_setup.lock().unwrap_or_else(|e| e.into_inner());
+            if slot.is_some() {
+                return Err(CoreError::Other("voice setup is already running".into()));
+            }
+            let c = CancellationToken::new();
+            *slot = Some(c.clone());
+            c
+        };
+        let sup = self.clone();
+        Ok(async move {
+            let (tx, mut rx) = mpsc::unbounded_channel::<SetupEvent>();
+            let pump = {
+                let sup = sup.clone();
+                async move {
+                    while let Some(ev) = rx.recv().await {
+                        sup.record(ev);
+                    }
+                }
+            };
+            let run = {
+                let sup = sup.clone();
+                async move {
+                    let result = async {
+                        let vs = sup.voice_server()?;
+                        vs.install_deps(&tx, &cancel).await?;
+                        let _ = tx.send(SetupEvent::Log {
+                            line: "voice: starting the Hermes web server".into(),
+                        });
+                        if let Some(child) = vs.start().await? {
+                            let mut c = sup
+                                .dashboard_child
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
+                            *c = Some(child);
+                        }
+                        Ok::<(), CoreError>(())
+                    }
+                    .await;
+                    let _ = match result {
+                        Ok(()) => tx.send(SetupEvent::Log {
+                            line: "voice: ready".into(),
+                        }),
+                        Err(e) => tx.send(SetupEvent::Failed {
+                            message: format!("voice setup failed: {e}"),
+                        }),
+                    };
+                    drop(tx);
+                }
+            };
+            tokio::join!(run, pump);
+            let mut slot = sup.voice_setup.lock().unwrap_or_else(|e| e.into_inner());
+            *slot = None;
+        })
+    }
+
+    /// At app start (and on demand): bring the web server up when voice was
+    /// set up before. No-op otherwise.
+    pub async fn voice_ensure_server(&self) -> Result<bool> {
+        let vs = self.voice_server()?;
+        if !vs.deps_ready() {
+            return Ok(false);
+        }
+        if let Some(child) = vs.start().await? {
+            let mut c = self
+                .dashboard_child
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            *c = Some(child);
+        }
+        Ok(true)
+    }
+
+    pub async fn voice_transcribe(&self, audio: &[u8], mime: &str) -> Result<String> {
+        let vs = self.voice_server()?;
+        if !vs.is_running().await {
+            self.voice_ensure_server().await?;
+        }
+        vs.transcribe(audio, mime).await
+    }
+
+    pub async fn voice_speak(&self, text: &str) -> Result<String> {
+        let vs = self.voice_server()?;
+        if !vs.is_running().await {
+            self.voice_ensure_server().await?;
+        }
+        vs.speak(text).await
+    }
+}

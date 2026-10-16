@@ -157,3 +157,23 @@ enable`, при изменении файлов gateway перезапускае
 **Последствия.** Безопасность не зависит от промпта и от модели. Цена — лишние подтверждения для
 новых инструментов (default confirm), регулируется политикой. `HERMES_WRITE_SAFE_ROOT` как второй
 рубеж — позже, когда станет ясно, какие папки реально нужны.
+
+## 2026-10-16 — Этап 5: голос через веб-сервер Hermes, Whisper локально, Edge TTS
+
+**Контекст.** В v0.22.2 api_server не имеет аудио-эндпоинтов (`audio_api: false`); они есть у веб-сервера
+Hermes (`hermes dashboard`): `POST /api/audio/transcribe` (`{data_url}`) и `POST /api/audio/speak`
+(`{text}` → `data_url`), авторизация заголовком `X-Hermes-Session-Token`, токен задаётся env
+`HERMES_DASHBOARD_SESSION_TOKEN`. Окружение Python Hermes управляется `pm` (хэшированные каталоги), прямые
+пути к venv ненадёжны.
+
+**Решение.** Второй супервизируемый процесс `hermes dashboard --no-open --host 127.0.0.1 --port 8644`
+с нашим токеном (`dashboard.token` в данных оболочки), вывод в `logs/dashboard.log`. Зависимости —
+`hermes pm install --extra voice` (Faster-Whisper, sounddevice), маркер `voice-ready`. Настройки Hermes:
+`stt.provider local`, `stt.local.model small`, `stt.local.language ru`, `tts.provider edge`,
+`tts.edge.voice ru-RU-DmitryNeural` (ключ `stt.language` из этапа 2 был неверным, убран). Захват
+микрофона в webview → WAV 16 кГц mono (свой кодировщик, без зависимостей от контейнеров на стороне Hermes),
+транскрипт идёт обычным ходом чата, ответ озвучивается `speak` и играет через `<audio>`.
+
+**Последствия.** Edge TTS требует интернета и не хранится локально — Piper (офлайн, `ru_RU`) следующий
+шаг. Первый запуск веб-сервера может долго ставить fastapi/uvicorn через PM. Push-to-talk пока только в
+окне (кнопка/пробел); глобальная горячая клавиша и прерывание озвучки — отдельно.

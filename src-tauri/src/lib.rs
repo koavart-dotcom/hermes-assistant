@@ -81,6 +81,16 @@ pub fn run() {
                 }
             });
 
+            // Bring the Hermes web server (voice endpoints) up when voice was set up.
+            let sup_voice = sup.clone();
+            tauri::async_runtime::spawn(async move {
+                match sup_voice.voice_ensure_server().await {
+                    Ok(true) => log::info!("voice server ready"),
+                    Ok(false) => {}
+                    Err(e) => log::warn!("voice server start failed: {e}"),
+                }
+            });
+
             // Keep the bundled permission plugin installed and enabled.
             let sup_plugins = sup.clone();
             tauri::async_runtime::spawn(async move {
@@ -130,6 +140,10 @@ pub fn run() {
             commands::permissions_log,
             commands::permissions_policy_get,
             commands::permissions_policy_set,
+            commands::voice_status,
+            commands::voice_setup,
+            commands::voice_transcribe,
+            commands::voice_speak,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

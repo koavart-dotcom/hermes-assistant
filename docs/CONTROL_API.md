@@ -49,6 +49,11 @@ Agent на ПК Артема, не трогая окно приложения. �
 Хранится в Credential Manager (фолбэк — файл `secrets/github_token`). Сама проверка и установка
 обновления — в окне (баннер «Доступна версия …» → «Обновить»), Tauri-команды `update_check`/`update_install`.
 
+**Голос (с v0.7.0, этап 5):** `GET /voice/status` (`VoiceStatus`: deps_ready, server_running, провайдеры);
+`POST /voice/setup` → 202 (ставит `hermes pm install --extra voice`, пишет настройки STT/TTS, запускает веб-сервер
+Hermes на 127.0.0.1:8644; прогресс — в `/setup/events`); `POST /voice/transcribe` `{audio_base64, mime_type}` →
+`{transcript}`; `POST /voice/speak` `{text}` → `{data_url}` (Edge TTS, mp3).
+
 **Разрешения (с v0.6.0, этап 4):** `GET /permissions/log?tail=200` — журнал решений плагина
 `hermes_permissions` (`{ts, tool, action: allow|confirm|block, reason, preview, task_id}`);
 `GET`/`PUT /permissions/policy` — переопределение политики `hermes_permissions.json`

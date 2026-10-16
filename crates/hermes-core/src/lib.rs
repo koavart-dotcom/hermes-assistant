@@ -18,6 +18,8 @@ pub mod setup;
 pub mod status;
 pub mod supervisor;
 pub mod supervisor_chat;
+pub mod supervisor_voice;
+pub mod voice;
 
 pub use error::{CoreError, Result};
 pub use paths::Layout;

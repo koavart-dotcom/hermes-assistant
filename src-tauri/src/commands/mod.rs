@@ -6,6 +6,7 @@ use hermes_core::chat::{ChatMessage, SessionSummary};
 use hermes_core::gateway::Gateway;
 use hermes_core::setup::{SetupOptions, SetupPlan};
 use hermes_core::status::StatusSnapshot;
+use hermes_core::voice::VoiceStatus;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 use ts_rs::TS;
@@ -163,6 +164,46 @@ pub async fn chat_approve(
         .chat_approve(&run_id, &choice)
         .await
         .map_err(err)
+}
+
+// ----------------------------------------------------------------- voice --
+
+#[tauri::command]
+pub async fn voice_status(state: State<'_, AppState>) -> Result<VoiceStatus, String> {
+    state.supervisor.voice_status().await.map_err(err)
+}
+
+/// Install voice dependencies and start the Hermes web server; progress
+/// arrives as `setup:event`.
+#[tauri::command]
+pub fn voice_setup(state: State<'_, AppState>) -> Result<(), String> {
+    let fut = state.supervisor.voice_setup().map_err(err)?;
+    tauri::async_runtime::spawn(fut);
+    Ok(())
+}
+
+/// `audio_base64` without the `data:` prefix; returns the transcript ("" = silence).
+#[tauri::command]
+pub async fn voice_transcribe(
+    state: State<'_, AppState>,
+    audio_base64: String,
+    mime_type: Option<String>,
+) -> Result<String, String> {
+    use base64::Engine as _;
+    let audio = base64::engine::general_purpose::STANDARD
+        .decode(audio_base64.trim())
+        .map_err(err)?;
+    state
+        .supervisor
+        .voice_transcribe(&audio, mime_type.as_deref().unwrap_or("audio/wav"))
+        .await
+        .map_err(err)
+}
+
+/// Returns a `data:` URL with the synthesized speech.
+#[tauri::command]
+pub async fn voice_speak(state: State<'_, AppState>, text: String) -> Result<String, String> {
+    state.supervisor.voice_speak(&text).await.map_err(err)
 }
 
 // ----------------------------------------------------------- permissions --

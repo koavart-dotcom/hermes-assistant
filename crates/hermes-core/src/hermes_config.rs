@@ -20,7 +20,6 @@ pub fn settings(model: &str, api_key: &str, ollama_base_url: &str) -> Vec<(Strin
         ("model.provider".into(), "custom".into()),
         ("model.base_url".into(), format!("{ollama_base_url}/v1")),
         ("approvals.mode".into(), "manual".into()),
-        ("stt.language".into(), "ru".into()),
         ("API_SERVER_ENABLED".into(), "true".into()),
         ("API_SERVER_KEY".into(), api_key.into()),
         ("HERMES_API_TIMEOUT".into(), "1800".into()),

@@ -104,6 +104,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/chat/approve", post(chat_approve))
         .route("/chat/events", get(chat_events))
         .route("/update/token", axum::routing::put(update_token))
+        .route("/voice/status", get(voice_status))
+        .route("/voice/setup", post(voice_setup))
+        .route("/voice/transcribe", post(voice_transcribe))
+        .route("/voice/speak", post(voice_speak))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -529,6 +533,64 @@ async fn update_token(
     Ok(Json(
         json!({ "ok": true, "configured": !req.token.trim().is_empty() }),
     ))
+}
+
+// ----------------------------------------------------------------- voice --
+
+async fn voice_status(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<crate::voice::VoiceStatus>> {
+    Ok(Json(ctl.sup.voice_status().await?))
+}
+
+async fn voice_setup(State(ctl): State<Arc<Ctl>>) -> ApiResult<(StatusCode, Json<Value>)> {
+    let fut = ctl
+        .sup
+        .voice_setup()
+        .map_err(|e| ApiError(StatusCode::CONFLICT, e.to_string()))?;
+    tokio::spawn(fut);
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({ "started": true, "last_seq": ctl.sup.last_seq() })),
+    ))
+}
+
+#[derive(Deserialize)]
+struct TranscribeRequest {
+    /// Base64 audio (no data: prefix).
+    audio_base64: String,
+    #[serde(default = "default_mime")]
+    mime_type: String,
+}
+
+fn default_mime() -> String {
+    "audio/wav".into()
+}
+
+async fn voice_transcribe(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<TranscribeRequest>,
+) -> ApiResult<Json<Value>> {
+    use base64::Engine as _;
+    let audio = base64::engine::general_purpose::STANDARD
+        .decode(req.audio_base64.trim())
+        .map_err(|e| bad_request(format!("audio_base64: {e}")))?;
+    let text = ctl.sup.voice_transcribe(&audio, &req.mime_type).await?;
+    Ok(Json(json!({ "transcript": text })))
+}
+
+#[derive(Deserialize)]
+struct SpeakRequest {
+    text: String,
+}
+
+async fn voice_speak(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<SpeakRequest>,
+) -> ApiResult<Json<Value>> {
+    if req.text.trim().is_empty() {
+        return Err(bad_request("text is empty"));
+    }
+    let data_url = ctl.sup.voice_speak(&req.text).await?;
+    Ok(Json(json!({ "data_url": data_url })))
 }
 
 /// Last `tail` decisions of the permission plugin (JSON lines, newest last).

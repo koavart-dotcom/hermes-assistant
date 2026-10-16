@@ -9,6 +9,7 @@ import type { SetupOptions } from "@/types/generated/SetupOptions";
 import type { SetupPlan } from "@/types/generated/SetupPlan";
 import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
+import type { VoiceStatus } from "@/types/generated/VoiceStatus";
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
@@ -32,6 +33,12 @@ export const api = {
 
   updateCheck: () => invoke<UpdateInfo>("update_check"),
   updateInstall: () => invoke<void>("update_install"),
+
+  voiceStatus: () => invoke<VoiceStatus>("voice_status"),
+  voiceSetup: () => invoke<void>("voice_setup"),
+  voiceTranscribe: (audioBase64: string, mimeType = "audio/wav") =>
+    invoke<string>("voice_transcribe", { audioBase64, mimeType }),
+  voiceSpeak: (text: string) => invoke<string>("voice_speak", { text }),
 
   permissionsLog: (tail = 200) => invoke<PermissionRecord[]>("permissions_log", { tail }),
   permissionsPolicyGet: () => invoke<Record<string, unknown>>("permissions_policy_get"),

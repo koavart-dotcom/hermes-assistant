@@ -28,3 +28,4 @@ ts-rs.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 log.workspace = true
+base64 = "0.22"

@@ -44,6 +44,9 @@ pub struct Supervisor {
     pub(crate) chat_history: Mutex<ChatHistory>,
     pub(crate) chat_seq: AtomicU64,
     pub(crate) chat_runs: Mutex<ChatRuns>,
+    // Voice side (see supervisor_voice.rs): the Hermes web server we spawn.
+    pub(crate) dashboard_child: Mutex<Option<tokio::process::Child>>,
+    pub(crate) voice_setup: Mutex<Option<CancellationToken>>,
 }
 
 impl Supervisor {
@@ -61,6 +64,8 @@ impl Supervisor {
             chat_history: Mutex::new(VecDeque::new()),
             chat_seq: AtomicU64::new(0),
             chat_runs: Mutex::new(ChatRuns::new()),
+            dashboard_child: Mutex::new(None),
+            voice_setup: Mutex::new(None),
         })
     }
 
