@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { routes } from "@/app/routes";
 import { UpdateBanner } from "@/app/UpdateBanner";
 import { ChatEventsBridge } from "@/app/ChatEventsBridge";
+import { VoiceRuntime } from "@/app/VoiceRuntime";
 import { useUiStore } from "@/stores/ui";
 
 export function Layout() {
@@ -52,6 +53,7 @@ export function Layout() {
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <ChatEventsBridge />
+        <VoiceRuntime />
         <UpdateBanner />
         <div className="min-h-0 flex-1 overflow-auto">
           <Outlet />

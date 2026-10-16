@@ -74,6 +74,34 @@ export function peak(samples: Float32Array): number {
   return p;
 }
 
+export interface Mic {
+  /** Sample rate of the frames passed to `onFrame`. */
+  sampleRate: number;
+  close: () => Promise<void>;
+}
+
+/** Open the default microphone and stream float frames (always-listening mode). */
+export async function openMic(onFrame: (frame: Float32Array, sampleRate: number) => void): Promise<Mic> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
+  const ctx = new AudioContext();
+  const source = ctx.createMediaStreamSource(stream);
+  const processor = ctx.createScriptProcessor(4096, 1, 1);
+  processor.onaudioprocess = (e) => onFrame(new Float32Array(e.inputBuffer.getChannelData(0)), ctx.sampleRate);
+  source.connect(processor);
+  processor.connect(ctx.destination);
+  return {
+    sampleRate: ctx.sampleRate,
+    close: async () => {
+      processor.disconnect();
+      source.disconnect();
+      stream.getTracks().forEach((t) => t.stop());
+      await ctx.close();
+    },
+  };
+}
+
 export interface Recorder {
   stop: () => Promise<{ wav: Uint8Array; seconds: number }>;
   onLevel: (cb: (level: number) => void) => void;
