@@ -47,6 +47,8 @@ pub struct Supervisor {
     // Voice side (see supervisor_voice.rs): the Hermes web server we spawn.
     pub(crate) dashboard_child: Mutex<Option<tokio::process::Child>>,
     pub(crate) voice_setup: Mutex<Option<CancellationToken>>,
+    /// Last search query of a `web.*` quick command (see supervisor_quick.rs).
+    pub(crate) last_query: Mutex<Option<String>>,
 }
 
 impl Supervisor {
@@ -66,6 +68,7 @@ impl Supervisor {
             chat_runs: Mutex::new(ChatRuns::new()),
             dashboard_child: Mutex::new(None),
             voice_setup: Mutex::new(None),
+            last_query: Mutex::new(None),
         })
     }
 

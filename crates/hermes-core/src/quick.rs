@@ -363,6 +363,17 @@ pub enum Action {
     StopSpeech,
     /// Ask the shell UI to open something (`tickets`, `hud`, `hud_off`); no-op in the executor.
     Ui(String),
+    /// Search YouTube and open the first video.
+    YtPlay(String),
+    /// Open the N-th (1-based) video of the last search query.
+    YtPick(usize),
+    /// Open the N-th (1-based) web result of the last search query.
+    WebPick(usize),
+    /// Read the current browser tab (address bar → clipboard → fetch) and hand
+    /// the text to the model.
+    ReadPage,
+    /// Type text into the active window (Unicode SendInput).
+    TypeText(String),
 }
 
 pub const KEY_NAMES: &[&str] = &[
@@ -444,8 +455,25 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
             }
             Action::Ui(arg.to_string())
         }
+        "yt_play" => {
+            if arg.is_empty() {
+                return Err("yt_play needs a query".into());
+            }
+            Action::YtPlay(arg.to_string())
+        }
+        "yt_pick" => Action::YtPick(parse_index(arg)?),
+        "web_pick" => Action::WebPick(parse_index(arg)?),
+        "read_page" => Action::ReadPage,
+        "type" => Action::TypeText(arg.to_string()),
         other => return Err(format!("unknown action `{other}`")),
     })
+}
+
+fn parse_index(arg: &str) -> std::result::Result<usize, String> {
+    match arg.parse::<usize>() {
+        Ok(n) if (1..=20).contains(&n) => Ok(n),
+        _ => Err(format!("bad index `{arg}` (1..20)")),
+    }
 }
 
 pub fn is_dangerous(a: &Action) -> bool {
@@ -521,6 +549,18 @@ pub fn import_voice_pack(layout: &Layout, src: &Path, name: &str) -> Result<usiz
 pub struct Executor {
     pub layout: Layout,
     pub voice: String,
+    /// Last search query (set by the supervisor for `web.*` commands) so
+    /// "включи первое видео" / "открой вторую ссылку" know what to pick.
+    pub last_query: Option<String>,
+}
+
+/// What the shell should do after the actions ran.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Outcome {
+    /// Text to send to the model as a chat turn (e.g. a page to summarise).
+    pub handoff: Option<String>,
+    /// Something to say back (quick, no model).
+    pub spoken: Option<String>,
 }
 
 impl Executor {
@@ -528,12 +568,48 @@ impl Executor {
         Executor {
             layout,
             voice: voice.into(),
+            last_query: None,
         }
     }
 
-    pub async fn run(&self, actions: &[Action]) -> Result<()> {
+    pub async fn run(&self, actions: &[Action]) -> Result<Outcome> {
+        let mut out = Outcome::default();
         for a in actions {
             match a {
+                Action::YtPlay(q) => {
+                    let hits = crate::web::youtube_search(q).await?;
+                    platform::open_url(&hits[0].url).await?;
+                }
+                Action::YtPick(n) => {
+                    let q = self.last_query.as_deref().ok_or_else(|| {
+                        CoreError::Other("сначала скажите, что искать на YouTube".into())
+                    })?;
+                    let hits = crate::web::youtube_search(q).await?;
+                    let hit = hits.get(n - 1).ok_or_else(|| {
+                        CoreError::Other(format!("на YouTube нашлось меньше {n} видео"))
+                    })?;
+                    platform::open_url(&hit.url).await?;
+                }
+                Action::WebPick(n) => {
+                    let q = self
+                        .last_query
+                        .as_deref()
+                        .ok_or_else(|| CoreError::Other("сначала скажите, что искать".into()))?;
+                    let hits = crate::web::web_search(q).await?;
+                    let hit = hits.get(n - 1).ok_or_else(|| {
+                        CoreError::Other(format!("нашлось меньше {n} результатов"))
+                    })?;
+                    out.spoken = Some(hit.title.clone());
+                    platform::open_url(&hit.url).await?;
+                }
+                Action::ReadPage => {
+                    let url = platform::current_url().await?;
+                    let text = crate::web::page_text(&url, 6000).await?;
+                    out.handoff = Some(format!(
+                        "Кратко перескажи по-русски, о чём эта страница ({url}), 3–5 предложений, без вступления:\n\n{text}"
+                    ));
+                }
+                Action::TypeText(t) => platform::type_text(t).await?,
                 Action::Say(clip) => {
                     if let Some(path) = clip_path(&self.layout, &self.voice, clip) {
                         platform::play_wav(&path).await?;
@@ -556,7 +632,7 @@ impl Executor {
                 Action::StopSpeech | Action::Ui(_) => {}
             }
         }
-        Ok(())
+        Ok(out)
     }
 }
 
@@ -566,6 +642,7 @@ impl Executor {
 mod platform {
     use std::path::Path;
     use std::process::Stdio;
+    use std::time::Duration;
 
     use tokio::process::Command;
 
@@ -677,6 +754,77 @@ mod platform {
             return Err(CoreError::Other("SendInput was blocked".into()));
         }
         Ok(())
+    }
+
+    /// Type Unicode text into the focused window.
+    pub async fn type_text(text: &str) -> Result<()> {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE,
+            SendInput,
+        };
+        let mk = |unit: u16, up: bool| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: 0,
+                    wScan: unit,
+                    dwFlags: KEYEVENTF_UNICODE | if up { KEYEVENTF_KEYUP } else { 0 },
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        };
+        let mut inputs: Vec<INPUT> = Vec::with_capacity(text.len() * 4);
+        for unit in text.encode_utf16() {
+            inputs.push(mk(unit, false));
+            inputs.push(mk(unit, true));
+        }
+        if inputs.is_empty() {
+            return Ok(());
+        }
+        let sent = unsafe {
+            SendInput(
+                inputs.len() as u32,
+                inputs.as_ptr(),
+                std::mem::size_of::<INPUT>() as i32,
+            )
+        };
+        if sent as usize != inputs.len() {
+            return Err(CoreError::Other("SendInput (text) was blocked".into()));
+        }
+        Ok(())
+    }
+
+    /// URL of the active browser tab: focus the address bar, copy it, restore
+    /// the previous clipboard. Works in Chrome/Edge/Firefox.
+    pub async fn current_url() -> Result<String> {
+        let before = ps_out("Get-Clipboard -Raw").await.unwrap_or_default();
+        press(&["ctrl".into(), "l".into()]).await?;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        press(&["ctrl".into(), "c".into()]).await?;
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        press(&["esc".into()]).await?;
+        let url = ps_out("Get-Clipboard -Raw").await?.trim().to_string();
+        if !before.trim().is_empty() && before != url {
+            let _ = ps(&format!("Set-Clipboard -Value '{}'", q(before.trim_end()))).await;
+        }
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
+            return Err(CoreError::Other(format!(
+                "в адресной строке не адрес страницы: «{}»",
+                url.chars().take(60).collect::<String>()
+            )));
+        }
+        Ok(url)
+    }
+
+    async fn ps_out(script: &str) -> Result<String> {
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null());
+        hide_console(&mut cmd);
+        let out = cmd.output().await?;
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
     pub async fn volume_delta(delta: i32) -> Result<()> {
@@ -799,6 +947,14 @@ mod platform {
     pub async fn press(chord: &[String]) -> Result<()> {
         skip(&format!("key {}", chord.join("+")))
     }
+    pub async fn type_text(t: &str) -> Result<()> {
+        skip(&format!("type {t}"))
+    }
+    pub async fn current_url() -> Result<String> {
+        Err(crate::CoreError::Other(
+            "reading the browser address bar works on Windows only".into(),
+        ))
+    }
     pub async fn volume_delta(d: i32) -> Result<()> {
         skip(&format!("volume {d:+}"))
     }
@@ -889,6 +1045,23 @@ mod tests {
         assert!(
             p.find("найди в ютубе").is_none() || p.find("найди в ютубе").unwrap().query.is_none()
         );
+    }
+
+    #[test]
+    fn parses_browser_actions() {
+        assert_eq!(
+            parse_action("yt_play:котики").unwrap(),
+            Action::YtPlay("котики".into())
+        );
+        assert_eq!(parse_action("yt_pick:2").unwrap(), Action::YtPick(2));
+        assert_eq!(parse_action("web_pick:1").unwrap(), Action::WebPick(1));
+        assert_eq!(parse_action("read_page").unwrap(), Action::ReadPage);
+        assert_eq!(
+            parse_action("type:привет").unwrap(),
+            Action::TypeText("привет".into())
+        );
+        assert!(parse_action("yt_pick:0").is_err());
+        assert!(parse_action("yt_play:").is_err());
     }
 
     #[test]

@@ -82,7 +82,6 @@ function idlePhase(): "idle" | "listening" {
 /** Run a recognized utterance: quick command first, else a chat turn. */
 export async function handleUtterance(text: string): Promise<void> {
   const v = useVoiceStore.getState();
-  const chat = useChatStore.getState();
   v.setTranscript(text);
   v.setAnswer("");
   if (!text.trim()) {
@@ -102,23 +101,32 @@ export async function handleUtterance(text: string): Promise<void> {
       v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
       v.setPhase(idlePhase());
       if (r.ui) await showUi(r.ui);
+      if (r.ok && r.spoken) await speakAnswer(r.spoken);
+      if (r.ok && r.handoff) await sendToChat(text, r.handoff);
       return;
     }
-    let sessionId = chat.activeId;
-    if (!sessionId) {
-      const s = await api.chatCreateSession("Голос");
-      chat.upsertSession(s);
-      chat.setActive(s.id);
-      sessionId = s.id;
-    }
-    v.setWaitingSession(sessionId);
-    chat.addUserTurn(sessionId, text);
-    v.setPhase("thinking");
-    await api.chatSend(sessionId, text);
+    await sendToChat(text, text);
   } catch (e) {
     v.setError(errorText(e));
     v.setPhase(idlePhase());
   }
+}
+
+/** Send a turn to the voice chat session; `shown` is what the user said, `message` what the model gets. */
+async function sendToChat(shown: string, message: string): Promise<void> {
+  const v = useVoiceStore.getState();
+  const chat = useChatStore.getState();
+  let sessionId = chat.activeId;
+  if (!sessionId) {
+    const s = await api.chatCreateSession("Голос");
+    chat.upsertSession(s);
+    chat.setActive(s.id);
+    sessionId = s.id;
+  }
+  v.setWaitingSession(sessionId);
+  chat.addUserTurn(sessionId, shown);
+  v.setPhase("thinking");
+  await api.chatSend(sessionId, message);
 }
 
 export async function confirmPendingQuick(yes: boolean): Promise<void> {
@@ -130,6 +138,7 @@ export async function confirmPendingQuick(yes: boolean): Promise<void> {
     const r = await api.quickRun(q.id, true, q.query);
     v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
     if (r.ui) await showUi(r.ui);
+    if (r.ok && r.spoken) await speakAnswer(r.spoken);
   } catch (e) {
     v.setError(errorText(e));
   }

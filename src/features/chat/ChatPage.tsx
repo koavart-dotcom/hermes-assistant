@@ -117,6 +117,8 @@ export function ChatPage() {
           const snap = await api.ticketsFetch();
           addAssistantTurn(sessionId, ticketsMarkdown(snap));
         }
+        if (r.ok && r.spoken) addAssistantTurn(sessionId, r.spoken);
+        if (r.ok && r.handoff) await api.chatSend(sessionId, r.handoff);
         return;
       }
       await api.chatSend(sessionId, text);

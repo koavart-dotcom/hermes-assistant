@@ -27,6 +27,10 @@ pub struct QuickRunResult {
     pub stops_speech: bool,
     /// UI target requested by the command (`tickets`), handled by the shell.
     pub ui: Option<String>,
+    /// Text the shell should send to the model as a chat turn (e.g. a page to summarise).
+    pub handoff: Option<String>,
+    /// Short text to say back without the model (e.g. the opened link's title).
+    pub spoken: Option<String>,
 }
 
 pub fn user_pack_path(layout: &crate::Layout) -> PathBuf {
@@ -82,11 +86,27 @@ impl Supervisor {
             )));
         }
         let voice = self.quick_voice();
-        let ex = Executor::new(self.ctx.layout.clone(), voice);
+        let mut ex = Executor::new(self.ctx.layout.clone(), voice);
+        // Remember what was searched so "включи первое видео" can follow.
+        if let Some(q) = query {
+            if cmd.id.starts_with("web.")
+                && cmd
+                    .actions
+                    .iter()
+                    .any(|a| a.starts_with("url:") || a.starts_with("yt_play:"))
+            {
+                *self.last_query.lock().unwrap_or_else(|e| e.into_inner()) = Some(q.to_string());
+            }
+        }
+        ex.last_query = self
+            .last_query
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         let result = ex.run(&actions).await;
-        let (ok, error) = match &result {
-            Ok(()) => (true, None),
-            Err(e) => (false, Some(e.to_string())),
+        let (ok, error, outcome) = match result {
+            Ok(o) => (true, None, o),
+            Err(e) => (false, Some(e.to_string()), Default::default()),
         };
         self.quick_log(
             &cmd.id,
@@ -106,6 +126,8 @@ impl Supervisor {
                 Action::Ui(t) => Some(t.clone()),
                 _ => None,
             }),
+            handoff: outcome.handoff,
+            spoken: outcome.spoken,
         })
     }
 

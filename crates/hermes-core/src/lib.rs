@@ -24,6 +24,7 @@ pub mod supervisor_chat;
 pub mod supervisor_quick;
 pub mod supervisor_voice;
 pub mod voice;
+pub mod web;
 
 pub use error::{CoreError, Result};
 pub use paths::Layout;

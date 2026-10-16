@@ -7,4 +7,12 @@ export type QuickRunResult = { id: string, name: string, ok: boolean, error: str
 /**
  * UI target requested by the command (`tickets`), handled by the shell.
  */
-ui: string | null, };
+ui: string | null, 
+/**
+ * Text the shell should send to the model as a chat turn (e.g. a page to summarise).
+ */
+handoff: string | null, 
+/**
+ * Short text to say back without the model (e.g. the opened link's title).
+ */
+spoken: string | null, };
