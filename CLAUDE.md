@@ -135,7 +135,9 @@ manual, API_SERVER_*); `gateway` — `hermes gateway start/stop/install` + `/hea
 (`setup_plan/setup_start/setup_cancel/status_snapshot/gateway_start/gateway_stop`, события `setup:event`),
 мастер «Установка» с согласием на скачивание и живой экран «Состояние». На сервере стоит rustup minimal
 (`~/.cargo/bin`, в PATH не добавлен): `cargo check/clippy -p hermes-core` работают локально, полные тесты и
-Tauri — в CI. Следующий шаг: первый прогон мастера на ПК Артема и починка по его логу.
+Tauri — в CI. 16.10: v0.3.0 — продукт переименован в «Hermes Assistant», папка приложения отделена от дома
+Hermes Agent, NSIS-хук сносит старую «Hermes» (ADR). Следующий шаг: первый прогон мастера на ПК Артема
+(v0.3.0) и починка по его логу.
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.
