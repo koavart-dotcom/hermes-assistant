@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api, isTauri, onChatEvent, type ApprovalChoice } from "@/services/tauri";
+import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
 
@@ -284,7 +285,11 @@ function TurnView({ turn }: { turn: Turn }) {
           <p className="mb-2 whitespace-pre-wrap text-xs text-muted-foreground">{turn.commentary.join("\n")}</p>
         ) : null}
         {turn.content ? (
-          <p className="whitespace-pre-wrap break-words">{turn.content}</p>
+          user ? (
+            <p className="whitespace-pre-wrap break-words">{turn.content}</p>
+          ) : (
+            <Markdown text={turn.content} />
+          )
         ) : turn.streaming ? (
           <span className="inline-flex items-center gap-2 text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />
