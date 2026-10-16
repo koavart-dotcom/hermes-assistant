@@ -54,8 +54,9 @@
   (Rust API, без npm-плагина; `default-features = false`, т.к. `zip ^4` снят с crates.io): endpoint
   `releases/latest/download/latest.json`, подпись ключом из `private/updater.key` (секрет GitHub
   `TAURI_SIGNING_PRIVATE_KEY`, без пароля), `release.yml` публикует релиз сразу с `latest.json`.
-  Репозиторий приватный → обновлятор шлёт `Authorization: Bearer <GitHub token>` из keyring
-  (`PUT /update/token` в Control API). Баннер в окне (`src/app/UpdateBanner.tsx`) проверяет при
+  **Репозиторий публичный с 16.10 (решение Артема)** — обновлятор работает без токена; поддержка токена
+  (`PUT /update/token`, keyring) оставлена на случай возврата к приватному. Перед каждым коммитом помнить,
+  что репозиторий виден всем: секреты только в `private/`. Баннер в окне (`src/app/UpdateBanner.tsx`) проверяет при
   запуске и раз в 6 ч. Версии ставить только через тег: `tauri.conf.json`, `package.json`, `Cargo.toml`.
 - **Control API (16.10, Артем: «чтоб ты сам мог заходить и настраивать»).** В приложении HTTP-API на
   `127.0.0.1:8643` с Bearer-токеном (`%LOCALAPPDATA%\ua.koavart.hermes\control.token`): статус, запуск

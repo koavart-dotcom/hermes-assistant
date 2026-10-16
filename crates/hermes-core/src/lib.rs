@@ -1,6 +1,7 @@
 //! Core logic of the Hermes shell. No Tauri dependency: everything here is
 //! testable with plain `cargo test` and reused by the Tauri commands.
 
+pub mod autostart;
 pub mod bootstrap;
 pub mod chat;
 pub mod cli;

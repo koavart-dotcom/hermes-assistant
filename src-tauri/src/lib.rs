@@ -63,6 +63,16 @@ pub fn run() {
                 }
             });
 
+            // Start at Windows login (per-user Run key), so Ollama and the
+            // control API come back after a reboot without a manual launch.
+            if let Ok(exe) = std::env::current_exe() {
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = hermes_core::autostart::enable(&exe).await {
+                        log::warn!("autostart registration failed: {e}");
+                    }
+                });
+            }
+
             // Restart the Ollama sidecar with the current environment.
             let sup_ollama = sup.clone();
             tauri::async_runtime::spawn(async move {
