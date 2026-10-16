@@ -6,6 +6,7 @@ pub mod bootstrap;
 pub mod chat;
 pub mod cli;
 pub mod control;
+pub mod digest;
 pub mod envkeys;
 pub mod error;
 pub mod events;

@@ -24,6 +24,32 @@ pub struct Prefs {
     pub wake_required: bool,
     /// Folder under `voice-pack/` with the reaction clips.
     pub voice_pack: String,
+    /// Helpdesk digest schedule.
+    pub digest: Digest,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/types/generated/")]
+#[serde(default)]
+pub struct Digest {
+    pub enabled: bool,
+    /// Local times `HH:MM`.
+    pub times: Vec<String>,
+    /// Say it aloud (respecting silent mode) and post into the voice chat.
+    pub speak: bool,
+    /// Send to Telegram (needs TELEGRAM_BOT_TOKEN + chat id in Hermes' .env).
+    pub telegram: bool,
+}
+
+impl Default for Digest {
+    fn default() -> Self {
+        Digest {
+            enabled: false,
+            times: vec!["09:00".into(), "14:00".into(), "17:00".into()],
+            speak: true,
+            telegram: true,
+        }
+    }
 }
 
 impl Default for Prefs {
@@ -39,6 +65,7 @@ impl Default for Prefs {
             ],
             wake_required: true,
             voice_pack: "Jarvis".into(),
+            digest: Digest::default(),
         }
     }
 }
@@ -72,6 +99,19 @@ pub fn save(layout: &Layout, prefs: &Prefs) -> Result<Prefs> {
     if p.voice_pack.trim().is_empty() || p.voice_pack.contains(['/', '\\', '.']) {
         p.voice_pack = Prefs::default().voice_pack;
     }
+    p.digest.times = p
+        .digest
+        .times
+        .iter()
+        .filter_map(|t| {
+            let t = t.trim();
+            let (h, m) = t.split_once(':')?;
+            let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
+            (h < 24 && m < 60).then(|| format!("{h:02}:{m:02}"))
+        })
+        .collect();
+    p.digest.times.sort();
+    p.digest.times.dedup();
     let path = path(layout);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -96,11 +136,18 @@ mod tests {
             wake_words: vec![" Джарвис ".into(), "".into()],
             wake_required: false,
             voice_pack: "../x".into(),
+            digest: Digest {
+                enabled: true,
+                times: vec!["9:5".into(), "bad".into(), "17:00".into(), "09:05".into()],
+                speak: true,
+                telegram: false,
+            },
         };
         let saved = save(&layout, &p).unwrap();
         assert_eq!(saved.voice_volume, 1.0);
         assert_eq!(saved.wake_words, vec!["джарвис"]);
         assert_eq!(saved.voice_pack, "Jarvis");
+        assert_eq!(saved.digest.times, vec!["09:05", "17:00"]);
         assert_eq!(load(&layout), saved);
         // Unknown/missing fields fall back to defaults.
         std::fs::write(path(&layout), r#"{"silent": true}"#).unwrap();

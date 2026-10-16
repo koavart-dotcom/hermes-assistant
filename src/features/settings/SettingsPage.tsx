@@ -7,6 +7,7 @@ import { EnvKeysSection } from "@/features/settings/EnvKeysSection";
 import { ModelSection } from "@/features/settings/ModelSection";
 import { SpeechSection } from "@/features/settings/SpeechSection";
 import { VoiceSection } from "@/features/settings/VoiceSection";
+import { DigestSection } from "@/features/settings/DigestSection";
 import { api, isTauri } from "@/services/tauri";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 
@@ -102,6 +103,7 @@ export function SettingsPage() {
       <ModelSection />
       <SpeechSection />
       <VoiceSection />
+      <DigestSection />
       <EnvKeysSection />
     </PageShell>
   );

@@ -98,6 +98,7 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/gateway/restart", post(gateway_restart))
         .route("/freescout/tickets", get(freescout_tickets))
         .route("/prefs", get(prefs_get).put(prefs_put))
+        .route("/digest/run", post(digest_run))
         .route("/models/options", get(models_options))
         .route("/models/current", get(models_current).put(models_apply))
         .route("/models/pull", post(models_pull))
@@ -322,6 +323,20 @@ async fn freescout_tickets(
 }
 
 // ------------------------------------------------------------ settings --
+
+#[derive(Deserialize, Default)]
+struct DigestRequest {
+    #[serde(default)]
+    telegram: bool,
+}
+
+async fn digest_run(
+    State(ctl): State<Arc<Ctl>>,
+    body: Option<Json<DigestRequest>>,
+) -> ApiResult<Json<crate::digest::DigestResult>> {
+    let req = body.map(|b| b.0).unwrap_or_default();
+    Ok(Json(ctl.sup.digest_run(req.telegram).await?))
+}
 
 async fn prefs_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::prefs::Prefs> {
     Json(ctl.sup.prefs())

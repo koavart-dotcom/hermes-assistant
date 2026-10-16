@@ -88,6 +88,12 @@ tts_voice}`, перезапуск сервера голоса), `GET /speech/tts
 доступные для импорта из Luxify), `POST /voice/packs/import {name}`. `hermesctl prefs|models|model|model-set|model-pull|
 speech|speech-set|voice-packs|voice-pack-import`.
 
+**Сводка хелпдеска (с v0.16.0):** `POST /digest/run {telegram}` → `DigestResult` `{text, spoken, telegram_sent,
+telegram_error}` — текст для чата/Telegram и фраза для озвучки из текущих заявок FreeScout; при `telegram: true`
+отправка через Bot API (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` или первый из `TELEGRAM_ALLOWED_USERS` в `.env`).
+Расписание (`prefs.digest`: enabled, times `HH:MM`, speak, telegram) исполняет главное окно приложения по местному
+времени. `hermesctl digest [true]`.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

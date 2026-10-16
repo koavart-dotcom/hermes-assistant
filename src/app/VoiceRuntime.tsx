@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { emitVoiceState, isTauri, onChatEvent, onHudPtt } from "@/services/tauri";
 import { applyMode, loadPrefs, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
+import { dueTime, fireKey, readFired, writeFired } from "@/lib/digest";
+import { runDigest } from "@/lib/digestRun";
 import { useVoiceStore } from "@/stores/voice";
 
 /**
@@ -33,6 +35,24 @@ export function VoiceRuntime() {
       }
     }).then((u) => (unlisten = u));
     return () => unlisten?.();
+  }, []);
+
+  // Helpdesk digest on schedule (local time, once per configured time per day).
+  useEffect(() => {
+    if (!isTauri()) return;
+    const tick = () => {
+      const d = useVoiceStore.getState().prefs.digest;
+      if (!d.enabled || !d.times.length) return;
+      const fired = readFired();
+      const now = new Date();
+      const t = dueTime(now, d.times, fired);
+      if (!t) return;
+      fired.add(fireKey(now, t));
+      writeFired(fired);
+      void runDigest();
+    };
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
   }, []);
 
   // Mirror phase/level to the floating HUD window (≤ 25 fps) and take its presses.

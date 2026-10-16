@@ -178,6 +178,7 @@ pub fn run() {
             commands::open_url,
             commands::hud_window_open,
             commands::hud_window_close,
+            commands::digest_run,
             commands::prefs_get,
             commands::prefs_set,
             commands::model_options,

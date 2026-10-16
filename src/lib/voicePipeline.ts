@@ -150,6 +150,11 @@ export async function showUi(target: string): Promise<void> {
   try {
     if (target === "hud") await api.hudWindowOpen();
     if (target === "hud_off") await api.hudWindowClose();
+    if (target === "digest") {
+      const { runDigest } = await import("@/lib/digestRun");
+      await runDigest(true);
+      return;
+    }
     if (target !== "tickets") return;
     // The window is opened in parallel: the spoken summary must not wait for it.
     api.ticketsWindowOpen().catch((e) => {

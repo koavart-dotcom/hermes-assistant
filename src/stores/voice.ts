@@ -7,6 +7,7 @@ export const DEFAULT_PREFS: Prefs = {
   wake_words: ["джарвис", "гермес", "jarvis", "hermes"],
   wake_required: true,
   voice_pack: "Jarvis",
+  digest: { enabled: false, times: ["09:00", "14:00", "17:00"], speak: true, telegram: true },
 };
 
 /** How the assistant takes input: text only, push-to-talk, or always listening for a wake word. */

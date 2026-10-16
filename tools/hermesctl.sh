@@ -91,6 +91,7 @@ case "${cmd}" in
   gateway-restart) call POST /gateway/restart ;;
   tickets)       call GET /freescout/tickets ;;
   prefs)         call GET /prefs ;;
+  digest)        call POST /digest/run "{\"telegram\":${1:-false}}" ;;
   prefs-put)     call PUT /prefs "@${1:?json file}" ;;
   models)        call GET /models/options ;;
   model)         call GET /models/current ;;

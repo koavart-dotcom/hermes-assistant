@@ -110,6 +110,10 @@ export function ChatPage() {
         }
         const r = await api.quickRun(quick.id, false, quick.query);
         addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
+        if (r.ui === "digest") {
+          const { runDigest } = await import("@/lib/digestRun");
+          await runDigest(true);
+        }
         if (r.ui === "hud") await api.hudWindowOpen();
         if (r.ui === "hud_off") await api.hudWindowClose();
         if (r.ui === "tickets") {

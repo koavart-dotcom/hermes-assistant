@@ -3,6 +3,7 @@
 //! work lives in `hermes_core::supervisor`, which the control API shares.
 
 use hermes_core::chat::{ChatMessage, SessionSummary};
+use hermes_core::digest::DigestResult;
 use hermes_core::envkeys::{EnvKey, EnvPreset};
 use hermes_core::freescout::TicketsSnapshot;
 use hermes_core::gateway::Gateway;
@@ -439,6 +440,14 @@ pub async fn open_url(url: String) -> Result<(), String> {
 }
 
 // ------------------------------------------------------------ settings --
+
+#[tauri::command]
+pub async fn digest_run(
+    state: State<'_, AppState>,
+    telegram: bool,
+) -> Result<DigestResult, String> {
+    state.supervisor.digest_run(telegram).await.map_err(err)
+}
 
 #[tauri::command]
 pub fn prefs_get(state: State<'_, AppState>) -> Prefs {

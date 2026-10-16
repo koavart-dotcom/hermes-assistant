@@ -450,7 +450,7 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "shutdown" => Action::Shutdown,
         "stop_speech" => Action::StopSpeech,
         "ui" => {
-            if !matches!(arg, "tickets" | "hud" | "hud_off") {
+            if !matches!(arg, "tickets" | "hud" | "hud_off" | "digest") {
                 return Err(format!("unknown ui target `{arg}`"));
             }
             Action::Ui(arg.to_string())

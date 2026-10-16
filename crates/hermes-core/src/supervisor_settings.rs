@@ -56,6 +56,41 @@ fn count_wavs(dir: &std::path::Path) -> usize {
 }
 
 impl Supervisor {
+    /// Build the helpdesk digest now; send it to Telegram when asked and configured.
+    pub async fn digest_run(&self, telegram: bool) -> Result<crate::digest::DigestResult> {
+        let snap = self.freescout_tickets().await?;
+        let text = crate::digest::build_text(&snap, 8);
+        let spoken = crate::digest::build_spoken(&snap);
+        let (telegram_sent, telegram_error) = if telegram {
+            match crate::digest::telegram_target(&self.ctx.layout) {
+                Some(t) => match crate::digest::send_telegram(&t, &text).await {
+                    Ok(()) => (true, None),
+                    Err(e) => (false, Some(e.to_string())),
+                },
+                None => (
+                    false,
+                    Some(
+                        "Telegram не настроен: нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID".into(),
+                    ),
+                ),
+            }
+        } else {
+            (false, None)
+        };
+        log::info!(
+            "digest: mine {} unassigned {} telegram {}",
+            snap.mine.len(),
+            snap.unassigned.len(),
+            telegram_sent
+        );
+        Ok(crate::digest::DigestResult {
+            text,
+            spoken,
+            telegram_sent,
+            telegram_error,
+        })
+    }
+
     pub fn prefs(&self) -> Prefs {
         prefs::load(&self.ctx.layout)
     }
