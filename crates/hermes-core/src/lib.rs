@@ -3,6 +3,7 @@
 
 pub mod bootstrap;
 pub mod cli;
+pub mod control;
 pub mod error;
 pub mod events;
 pub mod gateway;
@@ -12,6 +13,7 @@ pub mod paths;
 pub mod secrets;
 pub mod setup;
 pub mod status;
+pub mod supervisor;
 
 pub use error::{CoreError, Result};
 pub use paths::Layout;

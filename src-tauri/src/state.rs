@@ -1,24 +1,19 @@
-//! Process-wide state: paths, the pinned Hermes revision, the running setup
-//! task and the Ollama child we own.
+//! Process-wide state: the supervisor (paths, pinned Hermes revision, running
+//! setup, Ollama child, event stream) shared by Tauri commands and the
+//! control API.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use hermes_core::Layout;
 use hermes_core::bootstrap::Pin;
 use hermes_core::setup::SetupContext;
+use hermes_core::supervisor::Supervisor;
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Manager};
-use tokio_util::sync::CancellationToken;
 
 pub struct AppState {
-    pub ctx: Arc<SetupContext>,
-    pub setup: Mutex<Option<RunningSetup>>,
-    pub ollama_child: Mutex<Option<tokio::process::Child>>,
-}
-
-pub struct RunningSetup {
-    pub cancel: CancellationToken,
+    pub supervisor: Arc<Supervisor>,
 }
 
 impl AppState {
@@ -33,14 +28,13 @@ impl AppState {
         let layout = Layout::detect();
         log::info!("hermes home: {}", layout.hermes_home.display());
         log::info!("models dir: {}", layout.models_dir.display());
+        log::info!("app data dir: {}", layout.app_data_dir.display());
         Ok(AppState {
-            ctx: Arc::new(SetupContext {
+            supervisor: Supervisor::new(Arc::new(SetupContext {
                 layout,
                 script,
                 pin,
-            }),
-            setup: Mutex::new(None),
-            ollama_child: Mutex::new(None),
+            })),
         })
     }
 }

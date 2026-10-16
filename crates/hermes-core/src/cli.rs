@@ -29,7 +29,7 @@ pub fn hermes_env(cmd: &mut Command, layout: &Layout) {
 }
 
 /// Output of a finished child process.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct Output {
     pub stdout: Vec<String>,
     pub stderr: Vec<String>,

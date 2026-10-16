@@ -50,6 +50,11 @@
   (once/session/always/deny), `/stop`, Sessions API, `/v1/capabilities`. Голос: захват микрофона в
   оболочке, транскрипция и озвучка через эндпоинты Hermes (`/api/audio/transcribe`,
   `/api/audio/voice-config`, speech WebSocket — пути проверить по коду перед реализацией).
+- **Control API (16.10, Артем: «чтоб ты сам мог заходить и настраивать»).** В приложении HTTP-API на
+  `127.0.0.1:8643` с Bearer-токеном (`%LOCALAPPDATA%\ua.koavart.hermes\control.token`): статус, запуск
+  мастера, события, gateway, `hermes` CLI, `config.yaml`/`.env`, журнал. С сервера — `tools/hermesctl.sh`
+  (SSH-туннель, токен кэшируется в `private/`). Описание — `docs/CONTROL_API.md`. Отладку на ПК вести
+  через него, а не через скриншоты Артема; приложение должно быть запущено.
 - **Разрешения.** Hermes: `approvals.mode: manual` (не `smart`, не `off`), `approvals.deny` для своих
   запретов, `HERMES_WRITE_SAFE_ROOT`. Наши уровни Read-only / Normal / Confirm / Blocked из промта §7
   реализует **наш Python-плагин Hermes** на хуке `pre_tool_call` (block / modify / approve, fail-closed),
@@ -118,6 +123,7 @@ GitHub Actions `tauri-action` на windows-latest; `.exe/.msi` проверяе�
 - `docs/` — `ARCHITECTURE.md`, `ROADMAP.md`, `OPEN_SOURCE_RESEARCH.md`, `decisions.md`, `models.md`,
   `diagrams/`; `concept.md`, `deka-scenarios.md` — история этапа Mac
 - `archive/hermes-agent/` — конфиг, skills, скрипты этапа Mac (11–14.10.2026)
+- `tools/` — `hermesctl.sh`: доступ к Control API на ПК с этого сервера через SSH-туннель
 - `.github/workflows/` — CI (lint/typecheck/tests на push, сборка Windows на тег `v*`)
 - `private/` — реквизиты хостов, не в git
 

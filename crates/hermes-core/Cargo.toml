@@ -21,3 +21,8 @@ keyring = { version = "3", features = ["windows-native", "apple-native", "linux-
 getrandom = "0.3"
 hex = "0.4"
 dirs = "7"
+axum = "0.8"
+log.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
