@@ -79,7 +79,8 @@ case "${cmd}" in
   config-put)    call PUT /hermes/config "@${1:?file}" text/plain ;;
   env)           call GET /hermes/env ;;
   chat-sessions) call GET /chat/sessions ;;
-  chat-new)      call POST /chat/sessions "{\"title\":${1:+\"$1\"}${1:-null}}" ;;
+  chat-new)      body="$(printf '%s' "${1:-}" | python3 -c 'import json,sys; t=sys.stdin.read(); print(json.dumps({"title": t or None}))')"
+                 call POST /chat/sessions "${body}" ;;
   chat-messages) call GET "/chat/sessions/${1:?session id}/messages" ;;
   chat-send)     sid="${1:?session id}"; shift; msg="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
                  call POST /chat/send "{\"session_id\":\"${sid}\",\"message\":${msg}}" ;;
