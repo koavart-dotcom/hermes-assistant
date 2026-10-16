@@ -37,6 +37,25 @@ pub struct Output {
     pub status: String,
 }
 
+/// Read one line, decoding invalid UTF-8 lossily. Windows tools (uv, pip,
+/// PowerShell with an OEM code page) emit bytes that are not UTF-8 — the
+/// first run of the setup wizard died with "stream did not contain valid
+/// UTF-8" on the python-deps stage. `None` at EOF; `\r\n` and `\n` trimmed.
+pub async fn next_line_lossy<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<Option<String>> {
+    let mut buf = Vec::new();
+    let n = reader.read_until(b'\n', &mut buf).await?;
+    if n == 0 {
+        return Ok(None);
+    }
+    let mut line = String::from_utf8_lossy(&buf).into_owned();
+    while line.ends_with('\n') || line.ends_with('\r') {
+        line.pop();
+    }
+    Ok(Some(line))
+}
+
 /// Run a command to completion, streaming every output line to `events`
 /// (when given) and collecting it. Cancellation kills the child.
 pub async fn run_streaming(
@@ -60,8 +79,8 @@ pub async fn run_streaming(
         .take()
         .ok_or_else(|| CoreError::Other("no stderr".into()))?;
 
-    let mut out_lines = BufReader::new(stdout).lines();
-    let mut err_lines = BufReader::new(stderr).lines();
+    let mut out_lines = BufReader::new(stdout);
+    let mut err_lines = BufReader::new(stderr);
     let mut output = Output::default();
     let mut out_done = false;
     let mut err_done = false;
@@ -72,14 +91,14 @@ pub async fn run_streaming(
                 let _ = child.kill().await;
                 return Err(CoreError::Cancelled);
             }
-            line = out_lines.next_line(), if !out_done => match line? {
+            line = next_line_lossy(&mut out_lines), if !out_done => match line? {
                 Some(l) => {
                     if let Some(tx) = events { emit(tx, SetupEvent::Log { line: l.clone() }); }
                     output.stdout.push(l);
                 }
                 None => out_done = true,
             },
-            line = err_lines.next_line(), if !err_done => match line? {
+            line = next_line_lossy(&mut err_lines), if !err_done => match line? {
                 Some(l) => {
                     if let Some(tx) = events { emit(tx, SetupEvent::Log { line: format!("[{label}] {l}") }); }
                     output.stderr.push(l);
@@ -150,4 +169,41 @@ pub fn powershell_script(script: &Path) -> Command {
     ]);
     c.arg(script);
     c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn lossy_reader_survives_invalid_utf8_and_crlf() {
+        let data: &[u8] = b"ok line\r\n\xff\xfe bad bytes\nlast";
+        let mut r = BufReader::new(data);
+        assert_eq!(
+            next_line_lossy(&mut r).await.unwrap().as_deref(),
+            Some("ok line")
+        );
+        let bad = next_line_lossy(&mut r).await.unwrap().unwrap();
+        assert!(bad.ends_with(" bad bytes"));
+        assert!(bad.contains('\u{FFFD}'));
+        assert_eq!(
+            next_line_lossy(&mut r).await.unwrap().as_deref(),
+            Some("last")
+        );
+        assert_eq!(next_line_lossy(&mut r).await.unwrap(), None);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn run_streaming_collects_non_utf8_output() {
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "printf 'a\\xff\\n'; printf 'err\\xfe\\n' >&2; exit 3"]);
+        let out = run_streaming(cmd, "t", None, &CancellationToken::new())
+            .await
+            .unwrap();
+        assert!(!out.success);
+        assert_eq!(out.stdout.len(), 1);
+        assert!(out.stdout[0].starts_with('a'));
+        assert!(out.stderr[0].starts_with("err"));
+    }
 }
