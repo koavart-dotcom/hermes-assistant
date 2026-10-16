@@ -145,8 +145,12 @@ manual, API_SERVER_*); `gateway` — `hermes gateway start/stop/install` + `/hea
 мастер «Установка» с согласием на скачивание и живой экран «Состояние». На сервере стоит rustup minimal
 (`~/.cargo/bin`, в PATH не добавлен): `cargo check/clippy -p hermes-core` работают локально, полные тесты и
 Tauri — в CI. 16.10: v0.3.0 — продукт переименован в «Hermes Assistant», папка приложения отделена от дома
-Hermes Agent, NSIS-хук сносит старую «Hermes» (ADR). Следующий шаг: первый прогон мастера на ПК Артема
-(v0.3.0) и починка по его логу.
+Hermes Agent, NSIS-хук сносит старую «Hermes» (ADR). v0.3.1 — ветка `release/<v>` для pin; v0.4.0 — Control API;
+v0.4.1 — не-UTF-8 вывод uv; v0.4.2 — свободный порт Ollama. **Этап 2 закрыт 16.10.2026**: на ПК Hermes v0.22.2,
+gateway (автозапуск через «Автозагрузку», `Hermes_Gateway.vbs`), Ollama на 127.0.0.1:11437 (11434 занят VS Code),
+модель `qwen3.5:latest` в `D:\hermes\models`. Процесс релиза: коммит и `git push` делаю я, **тег, `git push
+origin v*` иногда и публикацию блокирует классификатор auto-режима** — тогда прошу Артема выполнить команду через
+`! ...`. Следующий шаг: этап 3 (чат через api_server `/v1/runs` + SSE).
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.
