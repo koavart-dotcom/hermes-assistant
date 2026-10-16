@@ -32,6 +32,18 @@ Agent на ПК Артема, не трогая окно приложения. �
 | GET | `/hermes/env` | `.env` с замаскированными значениями ключей `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` |
 | GET | `/logs?tail=200&file=` | хвост самого свежего `*.log` приложения (туда же зеркалятся события установки) |
 
+**Чат (с v0.5.0, этап 3)** — те же вызовы, что делает окно «Чат», через Sessions API Hermes:
+
+| Метод | Путь | Что делает |
+|---|---|---|
+| GET / POST | `/chat/sessions` | список сессий Hermes (`SessionSummary[]`) / создать (`{title?}` → 201) |
+| DELETE | `/chat/sessions/{id}` | удалить сессию |
+| GET | `/chat/sessions/{id}/messages` | история (`ChatMessage[]`, старые первыми) |
+| POST | `/chat/send` | `{session_id, message}` → 202; 409 если в сессии уже идёт ход |
+| GET | `/chat/events?after=N&limit=500` | события чата (`ChatEnvelope` + `seq`): `run_started`, `delta`, `thinking`, `tool_started/finished`, `commentary`, `approval_request`, `completed`, `failed`, `cancelled`, `ended` |
+| POST | `/chat/stop` | `{session_id}` — остановить ход |
+| POST | `/chat/approve` | `{run_id, choice}` — `once` / `session` / `always` / `deny` |
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

@@ -21,10 +21,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::bootstrap::Pin;
+use crate::chat::{ChatMessage, SessionSummary};
 use crate::cli::Output;
 use crate::setup::{SetupOptions, SetupPlan};
 use crate::status::StatusSnapshot;
 use crate::supervisor::{Stamped, Supervisor};
+use crate::supervisor_chat::ChatStamped;
 use crate::{CoreError, Layout, Result};
 
 pub const DEFAULT_PORT: u16 = 8643;
@@ -88,6 +90,19 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/hermes/config", get(config_get).put(config_put))
         .route("/hermes/env", get(env_get))
         .route("/logs", get(logs))
+        .route(
+            "/chat/sessions",
+            get(chat_sessions).post(chat_create_session),
+        )
+        .route(
+            "/chat/sessions/{id}",
+            axum::routing::delete(chat_delete_session),
+        )
+        .route("/chat/sessions/{id}/messages", get(chat_messages))
+        .route("/chat/send", post(chat_send))
+        .route("/chat/stop", post(chat_stop))
+        .route("/chat/approve", post(chat_approve))
+        .route("/chat/events", get(chat_events))
         .layer(middleware::from_fn_with_state(ctl.clone(), auth));
     let api = Router::new().route("/health", get(health)).merge(protected);
     Router::new().nest(BASE_PATH, api).with_state(ctl)
@@ -403,6 +418,107 @@ async fn logs(State(ctl): State<Arc<Ctl>>, Query(q): Query<Tail>) -> ApiResult<S
         })?,
     };
     Ok(tail_lines(&read_text(&path)?, q.tail.clamp(1, 20_000)))
+}
+
+// ------------------------------------------------------------------ chat --
+
+async fn chat_sessions(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Vec<SessionSummary>>> {
+    Ok(Json(ctl.sup.chat_sessions().await?))
+}
+
+#[derive(Deserialize, Default)]
+struct CreateSession {
+    title: Option<String>,
+}
+
+async fn chat_create_session(
+    State(ctl): State<Arc<Ctl>>,
+    body: Option<Json<CreateSession>>,
+) -> ApiResult<(StatusCode, Json<SessionSummary>)> {
+    let title = body.and_then(|Json(b)| b.title);
+    let s = ctl.sup.chat_create_session(title.as_deref()).await?;
+    Ok((StatusCode::CREATED, Json(s)))
+}
+
+async fn chat_delete_session(
+    State(ctl): State<Arc<Ctl>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> ApiResult<Json<Value>> {
+    ctl.sup.chat_delete_session(&id).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn chat_messages(
+    State(ctl): State<Arc<Ctl>>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> ApiResult<Json<Vec<ChatMessage>>> {
+    Ok(Json(ctl.sup.chat_messages(&id).await?))
+}
+
+#[derive(Deserialize)]
+struct SendRequest {
+    session_id: String,
+    message: String,
+}
+
+async fn chat_send(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<SendRequest>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let fut = ctl
+        .sup
+        .chat_send(&req.session_id, &req.message)
+        .map_err(|e| ApiError(StatusCode::CONFLICT, e.to_string()))?;
+    tokio::spawn(fut);
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(
+            json!({ "accepted": true, "session_id": req.session_id, "last_seq": ctl.sup.chat_last_seq() }),
+        ),
+    ))
+}
+
+#[derive(Deserialize)]
+struct StopRequest {
+    session_id: String,
+}
+
+async fn chat_stop(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<StopRequest>,
+) -> ApiResult<Json<Value>> {
+    ctl.sup.chat_stop(&req.session_id).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct ApproveRequest {
+    run_id: String,
+    choice: String,
+}
+
+async fn chat_approve(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<ApproveRequest>,
+) -> ApiResult<Json<Value>> {
+    ctl.sup
+        .chat_approve(&req.run_id, &req.choice)
+        .await
+        .map_err(|e| bad_request(e.to_string()))?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Serialize)]
+struct ChatEvents {
+    events: Vec<ChatStamped>,
+    last_seq: u64,
+}
+
+async fn chat_events(State(ctl): State<Arc<Ctl>>, Query(q): Query<Since>) -> Json<ChatEvents> {
+    Json(ChatEvents {
+        events: ctl.sup.chat_events_since(q.after, q.limit.min(5000)),
+        last_seq: ctl.sup.chat_last_seq(),
+    })
 }
 
 #[cfg(test)]

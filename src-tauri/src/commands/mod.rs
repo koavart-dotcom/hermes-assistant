@@ -2,6 +2,7 @@
 //! `src/types/generated/` by ts-rs (regenerated on `cargo test`). All real
 //! work lives in `hermes_core::supervisor`, which the control API shares.
 
+use hermes_core::chat::{ChatMessage, SessionSummary};
 use hermes_core::gateway::Gateway;
 use hermes_core::setup::{SetupOptions, SetupPlan};
 use hermes_core::status::StatusSnapshot;
@@ -85,6 +86,83 @@ pub async fn gateway_start(state: State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 pub async fn gateway_stop(state: State<'_, AppState>) -> Result<(), String> {
     state.supervisor.gateway_stop().await.map_err(err)
+}
+
+// ------------------------------------------------------------------ chat --
+
+pub const CHAT_EVENT: &str = "chat:event";
+
+#[tauri::command]
+pub async fn chat_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSummary>, String> {
+    state.supervisor.chat_sessions().await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn chat_create_session(
+    state: State<'_, AppState>,
+    title: Option<String>,
+) -> Result<SessionSummary, String> {
+    state
+        .supervisor
+        .chat_create_session(title.as_deref())
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn chat_delete_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<(), String> {
+    state
+        .supervisor
+        .chat_delete_session(&session_id)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn chat_messages(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<ChatMessage>, String> {
+    state
+        .supervisor
+        .chat_messages(&session_id)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn chat_send(
+    state: State<'_, AppState>,
+    session_id: String,
+    message: String,
+) -> Result<(), String> {
+    let fut = state
+        .supervisor
+        .chat_send(&session_id, &message)
+        .map_err(err)?;
+    tauri::async_runtime::spawn(fut);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn chat_stop(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    state.supervisor.chat_stop(&session_id).await.map_err(err)
+}
+
+#[tauri::command]
+pub async fn chat_approve(
+    state: State<'_, AppState>,
+    run_id: String,
+    choice: String,
+) -> Result<(), String> {
+    state
+        .supervisor
+        .chat_approve(&run_id, &choice)
+        .await
+        .map_err(err)
 }
 
 #[cfg(test)]

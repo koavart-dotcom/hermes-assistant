@@ -39,6 +39,27 @@ pub fn run() {
                 }
             });
 
+            // Forward chat events (tagged with their session) to the webview.
+            let chat_handle = app.handle().clone();
+            let mut chat_rx = sup.subscribe_chat();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    match chat_rx.recv().await {
+                        Ok(ev) => {
+                            let envelope = hermes_core::chat::ChatEnvelope {
+                                session_id: ev.session_id,
+                                event: ev.event,
+                            };
+                            let _ = chat_handle.emit(commands::CHAT_EVENT, &envelope);
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            log::warn!("chat event forwarder lagged by {n} events");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+            });
+
             // Control API on loopback (reached remotely through an SSH tunnel).
             match control::token(&sup.ctx.layout) {
                 Ok(token) => {
@@ -68,6 +89,13 @@ pub fn run() {
             commands::status_snapshot,
             commands::gateway_start,
             commands::gateway_stop,
+            commands::chat_sessions,
+            commands::chat_create_session,
+            commands::chat_delete_session,
+            commands::chat_messages,
+            commands::chat_send,
+            commands::chat_stop,
+            commands::chat_approve,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

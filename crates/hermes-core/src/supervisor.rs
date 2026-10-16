@@ -18,6 +18,7 @@ use crate::gateway::Gateway;
 use crate::ollama::Ollama;
 use crate::setup::{self, SetupContext, SetupOptions, SetupPlan};
 use crate::status::{self, StatusSnapshot};
+use crate::supervisor_chat::{ChatHistory, ChatRuns, ChatStamped};
 use crate::{CoreError, Result};
 
 /// How many events are kept for replay (`events_since`).
@@ -38,11 +39,17 @@ pub struct Supervisor {
     events: broadcast::Sender<Stamped>,
     history: Mutex<VecDeque<Stamped>>,
     seq: AtomicU64,
+    // Chat side (see supervisor_chat.rs).
+    pub(crate) chat_events: broadcast::Sender<ChatStamped>,
+    pub(crate) chat_history: Mutex<ChatHistory>,
+    pub(crate) chat_seq: AtomicU64,
+    pub(crate) chat_runs: Mutex<ChatRuns>,
 }
 
 impl Supervisor {
     pub fn new(ctx: Arc<SetupContext>) -> Arc<Supervisor> {
         let (events, _) = broadcast::channel(1024);
+        let (chat_events, _) = broadcast::channel(4096);
         Arc::new(Supervisor {
             ctx,
             setup: Mutex::new(None),
@@ -50,6 +57,10 @@ impl Supervisor {
             events,
             history: Mutex::new(VecDeque::new()),
             seq: AtomicU64::new(0),
+            chat_events,
+            chat_history: Mutex::new(VecDeque::new()),
+            chat_seq: AtomicU64::new(0),
+            chat_runs: Mutex::new(ChatRuns::new()),
         })
     }
 

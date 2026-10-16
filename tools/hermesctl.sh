@@ -78,6 +78,14 @@ case "${cmd}" in
   config-get)    call GET /hermes/config ;;
   config-put)    call PUT /hermes/config "@${1:?file}" text/plain ;;
   env)           call GET /hermes/env ;;
+  chat-sessions) call GET /chat/sessions ;;
+  chat-new)      call POST /chat/sessions "{\"title\":${1:+\"$1\"}${1:-null}}" ;;
+  chat-messages) call GET "/chat/sessions/${1:?session id}/messages" ;;
+  chat-send)     sid="${1:?session id}"; shift; msg="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')"
+                 call POST /chat/send "{\"session_id\":\"${sid}\",\"message\":${msg}}" ;;
+  chat-events)   call GET "/chat/events?after=${1:-0}&limit=${2:-500}" ;;
+  chat-stop)     call POST /chat/stop "{\"session_id\":\"${1:?session id}\"}" ;;
+  chat-approve)  call POST /chat/approve "{\"run_id\":\"${1:?run id}\",\"choice\":\"${2:?choice}\"}" ;;
   raw)           call "${1:?METHOD}" "${2:?PATH}" "${3:-}" ;;
   *)             die "unknown command: ${cmd}" ;;
 esac
