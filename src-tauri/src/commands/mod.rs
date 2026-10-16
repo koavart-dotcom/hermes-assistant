@@ -207,7 +207,12 @@ pub async fn voice_transcribe(
 /// Returns a `data:` URL with the synthesized speech.
 #[tauri::command]
 pub async fn voice_speak(state: State<'_, AppState>, text: String) -> Result<String, String> {
-    state.supervisor.voice_speak(&text).await.map_err(err)
+    log::info!("voice: speak {} chars", text.chars().count());
+    let r = state.supervisor.voice_speak(&text).await.map_err(err);
+    if let Err(e) = &r {
+        log::warn!("voice: speak failed: {e}");
+    }
+    r
 }
 
 // ----------------------------------------------------------------- quick --
@@ -332,7 +337,13 @@ pub const TICKETS_WINDOW: &str = "tickets";
 
 #[tauri::command]
 pub async fn tickets_fetch(state: State<'_, AppState>) -> Result<TicketsSnapshot, String> {
-    state.supervisor.freescout_tickets().await.map_err(err)
+    log::info!("tickets: fetch");
+    let r = state.supervisor.freescout_tickets().await.map_err(err);
+    match &r {
+        Ok(s) => log::info!("tickets: mine {} unassigned {}", s.mine.len(), s.unassigned.len()),
+        Err(e) => log::warn!("tickets: fetch failed: {e}"),
+    }
+    r
 }
 
 /// Small always-on-top window with the ticket list; focused if already open.
@@ -358,8 +369,12 @@ pub async fn tickets_window_open(app: AppHandle) -> Result<(), String> {
     .inner_size(480.0, 680.0)
     .min_inner_size(360.0, 400.0)
     .always_on_top(true)
+    // Shown by `on_page_load` once the page has finished loading: a window
+    // shown while WebView2 is still initialising stayed blank (v0.13.0–0.13.2).
+    .visible(false)
     .build()
     .map_err(err)?;
+    log::info!("tickets window: created (hidden until loaded)");
     Ok(())
 }
 
@@ -387,6 +402,7 @@ pub async fn hud_window_open(app: AppHandle) -> Result<(), String> {
     .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
+    .visible(false)
     .build()
     .map_err(err)?;
     // Bottom-right of the primary monitor, above the taskbar.

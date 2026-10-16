@@ -28,6 +28,17 @@ pub fn run() {
                 payload.event(),
                 payload.url()
             );
+            // Secondary windows are built hidden and revealed only now, so
+            // WebView2 never shows an unpainted (white) window.
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
+                && webview.label() != "main"
+            {
+                let window = webview.window();
+                if let Err(e) = window.show() {
+                    log::warn!("webview `{}`: show failed: {e}", webview.label());
+                }
+                let _ = window.set_focus();
+            }
         })
         .setup(|app| {
             let state = state::AppState::init(app.handle())?;
