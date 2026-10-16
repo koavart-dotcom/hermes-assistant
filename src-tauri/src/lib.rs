@@ -20,6 +20,15 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Every webview reports page loads; JS errors are forwarded by main.tsx.
+        .on_page_load(|webview, payload| {
+            log::info!(
+                "webview `{}`: {:?} {}",
+                webview.label(),
+                payload.event(),
+                payload.url()
+            );
+        })
         .setup(|app| {
             let state = state::AppState::init(app.handle())?;
             let sup = state.supervisor.clone();

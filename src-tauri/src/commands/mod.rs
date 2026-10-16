@@ -336,9 +336,13 @@ pub async fn tickets_fetch(state: State<'_, AppState>) -> Result<TicketsSnapshot
 }
 
 /// Small always-on-top window with the ticket list; focused if already open.
+/// `async` on purpose: window creation then runs off the main thread and the
+/// main thread stays free to serve the webview (a sync command blocked it and
+/// the new window stayed blank on Windows, v0.13.0).
 #[tauri::command]
-pub fn tickets_window_open(app: AppHandle) -> Result<(), String> {
+pub async fn tickets_window_open(app: AppHandle) -> Result<(), String> {
     use tauri::Manager;
+    log::info!("tickets window: open requested");
     if let Some(w) = app.get_webview_window(TICKETS_WINDOW) {
         let _ = w.unminimize();
         w.show().map_err(err)?;
@@ -363,8 +367,9 @@ pub const HUD_WINDOW: &str = "hud";
 
 /// Frameless, transparent, always-on-top reactor in the bottom-right corner.
 #[tauri::command]
-pub fn hud_window_open(app: AppHandle) -> Result<(), String> {
+pub async fn hud_window_open(app: AppHandle) -> Result<(), String> {
     use tauri::Manager;
+    log::info!("hud window: open requested");
     if let Some(w) = app.get_webview_window(HUD_WINDOW) {
         w.show().map_err(err)?;
         return Ok(());
@@ -392,11 +397,12 @@ pub fn hud_window_open(app: AppHandle) -> Result<(), String> {
         let y = (area.position.y as f64 + area.size.height as f64) / scale - size - 16.0;
         let _ = w.set_position(tauri::LogicalPosition::new(x, y));
     }
+    log::info!("hud window: created");
     Ok(())
 }
 
 #[tauri::command]
-pub fn hud_window_close(app: AppHandle) -> Result<(), String> {
+pub async fn hud_window_close(app: AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(w) = app.get_webview_window(HUD_WINDOW) {
         w.close().map_err(err)?;

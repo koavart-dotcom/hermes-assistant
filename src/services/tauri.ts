@@ -111,6 +111,27 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Write a webview-side error into the application log (tauri-plugin-log). */
+export function reportError(kind: string, message: string): void {
+  if (!isTauri()) return;
+  const where = typeof location !== "undefined" ? location.hash || "/" : "";
+  invoke("plugin:log|log", {
+    level: 5,
+    message: `[webview ${where}] ${kind}: ${message}`,
+    location: null,
+    file: null,
+    line: null,
+    keyValues: null,
+  }).catch(() => undefined);
+}
+
+/** Forward uncaught errors and rejected promises of this window to the log. */
+export function installErrorReporting(): void {
+  if (typeof window === "undefined") return;
+  window.addEventListener("error", (e) => reportError("error", `${e.message} @ ${e.filename}:${e.lineno}`));
+  window.addEventListener("unhandledrejection", (e) => reportError("unhandledrejection", String(e.reason)));
+}
+
 // ---- Cross-window voice state (main window → floating HUD window) ----
 
 export interface VoiceStateEvent {

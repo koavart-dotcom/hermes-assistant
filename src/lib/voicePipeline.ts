@@ -4,7 +4,7 @@
  * Lives outside React so it keeps running on every page (see VoiceRuntime).
  */
 
-import { api } from "@/services/tauri";
+import { api, reportError } from "@/services/tauri";
 import { useChatStore } from "@/stores/chat";
 import { useVoiceStore } from "@/stores/voice";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
@@ -151,10 +151,15 @@ export async function showUi(target: string): Promise<void> {
     if (target === "hud") await api.hudWindowOpen();
     if (target === "hud_off") await api.hudWindowClose();
     if (target !== "tickets") return;
-    await api.ticketsWindowOpen();
+    // The window is opened in parallel: the spoken summary must not wait for it.
+    api.ticketsWindowOpen().catch((e) => {
+      reportError("tickets window", errorText(e));
+      v.setError(`Окно тикетов: ${errorText(e)}`);
+    });
     const snap = await api.ticketsFetch();
     await speakAnswer(snap.summary);
   } catch (e) {
+    reportError("showUi", errorText(e));
     v.setError(errorText(e));
     v.setPhase(idlePhase());
   }

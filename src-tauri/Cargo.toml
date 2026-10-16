@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 hermes-core = { path = "../crates/hermes-core" }
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["devtools"] }
 tauri-plugin-log = "2.10"
 tauri-plugin-store = "2.5"
 # No `zip` feature: every 2.x line of the plugin depends on zip ^4, which is
