@@ -58,6 +58,55 @@ pub fn sync_plugin_files(src_dir: &Path, hermes_home: &Path, name: &str) -> Resu
     Ok(changed)
 }
 
+/// Copy a bundled skill directory (`SKILL.md` + helpers) to
+/// `$HERMES_HOME/skills/<name>/`. Returns whether anything was written.
+pub fn sync_skill_files(src_dir: &Path, hermes_home: &Path, name: &str) -> Result<bool> {
+    if !src_dir.join("SKILL.md").exists() {
+        return Err(CoreError::Other(format!(
+            "skill source {} has no SKILL.md",
+            src_dir.display()
+        )));
+    }
+    let dest = hermes_home.join("skills").join(name);
+    std::fs::create_dir_all(&dest)?;
+    let mut changed = false;
+    for entry in std::fs::read_dir(src_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let target = dest.join(entry.file_name());
+        let src_bytes = std::fs::read(&path)?;
+        let same = std::fs::read(&target)
+            .map(|b| b == src_bytes)
+            .unwrap_or(false);
+        if !same {
+            std::fs::write(&target, &src_bytes)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
+}
+
+/// Install every skill directory found under `skills_dir`.
+pub fn sync_all_skills(skills_dir: &Path, hermes_home: &Path) -> Result<Vec<String>> {
+    let mut updated = Vec::new();
+    let Ok(rd) = std::fs::read_dir(skills_dir) else {
+        return Ok(updated);
+    };
+    for entry in rd.flatten() {
+        let p = entry.path();
+        if p.is_dir() && p.join("SKILL.md").exists() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if sync_skill_files(&p, hermes_home, &name)? {
+                updated.push(name);
+            }
+        }
+    }
+    Ok(updated)
+}
+
 pub fn log_path(layout: &Layout) -> PathBuf {
     layout.hermes_home.join(LOG_FILE)
 }
@@ -132,5 +181,32 @@ mod tests {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../hermes-plugins/hermes_permissions");
         assert!(src.join("plugin.yaml").exists(), "{}", src.display());
         assert!(src.join("__init__.py").exists());
+    }
+}
+
+#[cfg(test)]
+mod skill_tests {
+    use super::*;
+
+    #[test]
+    fn skills_are_copied_and_reported_once() {
+        let root = std::env::temp_dir().join(format!("hermes-skills-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let src = root.join("src").join("helpdesk-triage");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("SKILL.md"), "# skill").unwrap();
+        std::fs::create_dir_all(root.join("src").join("not-a-skill")).unwrap();
+        let home = root.join("home");
+        assert_eq!(
+            sync_all_skills(&root.join("src"), &home).unwrap(),
+            vec!["helpdesk-triage"]
+        );
+        assert!(home.join("skills/helpdesk-triage/SKILL.md").exists());
+        assert!(
+            sync_all_skills(&root.join("src"), &home)
+                .unwrap()
+                .is_empty()
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

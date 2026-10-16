@@ -80,6 +80,8 @@ pub struct SetupContext {
     pub plugins_dir: PathBuf,
     /// Bundled quick-command pack (`resources/hermes-quick-commands/default.ru.json`).
     pub quick_pack: PathBuf,
+    /// Bundled Hermes skills (`resources/hermes-skills/`), one dir per skill.
+    pub skills_dir: PathBuf,
 }
 
 impl SetupContext {
@@ -275,6 +277,7 @@ mod tests {
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
+            skills_dir: PathBuf::from("skills"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

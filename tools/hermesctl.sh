@@ -91,6 +91,7 @@ case "${cmd}" in
   gateway-restart) call POST /gateway/restart ;;
   tickets)       call GET /freescout/tickets ;;
   ticket-draft)  call GET /freescout/draft ;;
+  ticket)        call GET "/freescout/conversation/${1:?number}" ;;
   ticket-reply)  n="${1:?number}"; shift; body="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps({"number": int(sys.argv[1]), "text": sys.stdin.read()}))' "$n")"
                  call POST /freescout/reply "$body" ;;
   prefs)         call GET /prefs ;;

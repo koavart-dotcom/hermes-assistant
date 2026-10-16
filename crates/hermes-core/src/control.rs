@@ -98,6 +98,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/gateway/restart", post(gateway_restart))
         .route("/freescout/tickets", get(freescout_tickets))
         .route("/freescout/reply", post(freescout_reply))
+        .route(
+            "/freescout/conversation/{number}",
+            get(freescout_conversation),
+        )
         .route("/freescout/draft", get(freescout_draft))
         .route("/prefs", get(prefs_get).put(prefs_put))
         .route("/digest/run", post(digest_run))
@@ -430,6 +434,19 @@ async fn freescout_reply(
 ) -> ApiResult<Json<Value>> {
     let id = ctl.sup.ticket_reply(req.number, &req.text).await?;
     Ok(Json(json!({ "ok": true, "conversation_id": id })))
+}
+
+async fn freescout_conversation(
+    State(ctl): State<Arc<Ctl>>,
+    axum::extract::Path(number): axum::extract::Path<u64>,
+) -> ApiResult<Json<crate::freescout::Conversation>> {
+    let cfg = crate::freescout::config(&ctl.sup.ctx.layout)?
+        .ok_or_else(|| CoreError::Other("FreeScout не настроен".into()))?;
+    Ok(Json(
+        crate::freescout::Client::new(cfg)
+            .conversation_text(number)
+            .await?,
+    ))
 }
 
 async fn freescout_draft(State(ctl): State<Arc<Ctl>>) -> Json<Value> {
@@ -984,6 +1001,7 @@ mod tests {
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
+            skills_dir: PathBuf::from("skills"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

@@ -145,6 +145,9 @@ pub fn run() {
             // Keep the bundled permission plugin installed and enabled.
             let sup_plugins = sup.clone();
             tauri::async_runtime::spawn(async move {
+                if let Err(e) = sup_plugins.skills_ensure() {
+                    log::warn!("skills install: {e}");
+                }
                 if let Err(e) = sup_plugins.plugins_ensure().await {
                     log::warn!("plugin refresh failed: {e}");
                 }

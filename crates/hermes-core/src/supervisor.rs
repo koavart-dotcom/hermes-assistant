@@ -261,6 +261,20 @@ impl Supervisor {
         Ok(())
     }
 
+    /// Copy bundled skills into `$HERMES_HOME/skills` (Hermes picks them up per
+    /// session, no restart needed).
+    pub fn skills_ensure(&self) -> Result<Vec<String>> {
+        let layout = &self.ctx.layout;
+        if !layout.bootstrap_marker().exists() {
+            return Ok(Vec::new());
+        }
+        let updated = crate::plugins::sync_all_skills(&self.ctx.skills_dir, &layout.hermes_home)?;
+        if !updated.is_empty() {
+            log::info!("skills updated: {}", updated.join(", "));
+        }
+        Ok(updated)
+    }
+
     pub async fn gateway_stop(&self) -> Result<()> {
         Gateway::new(self.ctx.layout.clone(), None)
             .stop(None, &CancellationToken::new())
@@ -317,6 +331,7 @@ mod tests {
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
+            skills_dir: PathBuf::from("skills"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),
