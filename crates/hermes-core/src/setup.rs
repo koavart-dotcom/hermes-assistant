@@ -78,6 +78,8 @@ pub struct SetupContext {
     pub pin: Pin,
     /// Bundled Hermes plugins (`resources/hermes-plugins/`), one dir per plugin.
     pub plugins_dir: PathBuf,
+    /// Bundled quick-command pack (`resources/hermes-quick-commands/default.ru.json`).
+    pub quick_pack: PathBuf,
 }
 
 impl SetupContext {
@@ -272,6 +274,7 @@ mod tests {
             layout: Layout::from_roots(std::path::Path::new("/lad"), std::path::Path::new("/data")),
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
+            quick_pack: PathBuf::from("quick.json"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

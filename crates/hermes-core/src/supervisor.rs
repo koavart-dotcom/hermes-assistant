@@ -302,6 +302,7 @@ mod tests {
             layout: Layout::from_roots(Path::new("/lad"), Path::new("/data")),
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
+            quick_pack: PathBuf::from("quick.json"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

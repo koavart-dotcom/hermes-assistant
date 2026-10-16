@@ -67,7 +67,8 @@
     "resources": {
       "resources/hermes/": "resources/hermes/",
       "../hermes-plugins/hermes_permissions/plugin.yaml": "resources/hermes-plugins/hermes_permissions/plugin.yaml",
-      "../hermes-plugins/hermes_permissions/__init__.py": "resources/hermes-plugins/hermes_permissions/__init__.py"
+      "../hermes-plugins/hermes_permissions/__init__.py": "resources/hermes-plugins/hermes_permissions/__init__.py",
+      "../hermes-quick-commands/default.ru.json": "resources/hermes-quick-commands/default.ru.json"
     }
   }
 }

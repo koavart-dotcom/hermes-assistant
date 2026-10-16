@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { startRecording, toBase64, type Recorder } from "@/lib/wav";
 import { api, isTauri, onChatEvent, onSetupEvent } from "@/services/tauri";
 import { useChatStore } from "@/stores/chat";
+import type { QuickMatch } from "@/types/generated/QuickMatch";
 
 type Phase = "idle" | "recording" | "transcribing" | "thinking" | "speaking";
 
@@ -28,6 +29,7 @@ export function VoicePage() {
   const [error, setError] = useState<string | null>(null);
   const [setupLog, setSetupLog] = useState<string[]>([]);
   const [settingUp, setSettingUp] = useState(false);
+  const [pendingQuick, setPendingQuick] = useState<QuickMatch | null>(null);
   const [speak, setSpeak] = useState<boolean>(() => {
     try {
       return localStorage.getItem(SPEAK_KEY) !== "0";
@@ -130,6 +132,20 @@ export function VoicePage() {
       const text = await api.voiceTranscribe(toBase64(wav), "audio/wav");
       setTranscript(text);
       if (!text) {
+        setPhase("idle");
+        return;
+      }
+      // Quick command first: executed locally, no model involved.
+      const quick = await api.quickMatch(text);
+      if (quick) {
+        if (quick.stops_speech) audioRef.current?.pause();
+        if (quick.needs_confirm) {
+          setPendingQuick(quick);
+          setPhase("idle");
+          return;
+        }
+        const r = await api.quickRun(quick.id, false);
+        setAnswer(r.ok ? `Команда: ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
         setPhase("idle");
         return;
       }
@@ -264,6 +280,29 @@ export function VoicePage() {
             <span className="text-muted-foreground">Вы: </span>
             {transcript}
           </p>
+        ) : null}
+        {pendingQuick ? (
+          <div className="w-full rounded-lg border border-amber-500/50 bg-amber-500/10 p-4 text-sm" role="dialog" aria-label="Подтверждение команды">
+            <p className="font-medium">Выполнить «{pendingQuick.name}»?</p>
+            <div className="mt-3 flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const q = pendingQuick;
+                  setPendingQuick(null);
+                  api
+                    .quickRun(q.id, true)
+                    .then((r) => setAnswer(r.ok ? `Команда: ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`))
+                    .catch((e) => setError(errorText(e)));
+                }}
+              >
+                Да, выполнить
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setPendingQuick(null)}>
+                Отмена
+              </Button>
+            </div>
+          </div>
         ) : null}
         {answer ? (
           <p className="w-full whitespace-pre-wrap rounded-md border px-3 py-2 text-sm">

@@ -25,5 +25,14 @@ axum = "0.8"
 base64 = "0.22"
 log.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+# Quick commands: SendInput (keys, mouse wake), monitor power, LockWorkStation.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Shutdown",
+] }
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

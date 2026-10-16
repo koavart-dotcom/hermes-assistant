@@ -28,6 +28,10 @@ impl AppState {
         let plugins_dir: PathBuf = app
             .path()
             .resolve("resources/hermes-plugins", BaseDirectory::Resource)?;
+        let quick_pack: PathBuf = app.path().resolve(
+            "resources/hermes-quick-commands/default.ru.json",
+            BaseDirectory::Resource,
+        )?;
         let layout = Layout::detect();
         log::info!("hermes home: {}", layout.hermes_home.display());
         log::info!("models dir: {}", layout.models_dir.display());
@@ -38,6 +42,7 @@ impl AppState {
                 script,
                 pin,
                 plugins_dir,
+                quick_pack,
             })),
         })
     }

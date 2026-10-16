@@ -109,6 +109,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/voice/transcribe", post(voice_transcribe))
         .route("/voice/speak", post(voice_speak))
         .route("/voice/restart", post(voice_restart))
+        .route("/quick/commands", get(quick_commands))
+        .route("/quick/match", post(quick_match))
+        .route("/quick/run", post(quick_run))
+        .route("/quick/voices/import", post(quick_voices_import))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -554,6 +558,64 @@ async fn voice_setup(State(ctl): State<Arc<Ctl>>) -> ApiResult<(StatusCode, Json
     ))
 }
 
+// ----------------------------------------------------------------- quick --
+
+async fn quick_commands(
+    State(ctl): State<Arc<Ctl>>,
+) -> ApiResult<Json<Vec<crate::quick::QuickCommandInfo>>> {
+    Ok(Json(ctl.sup.quick_commands()?))
+}
+
+#[derive(Deserialize)]
+struct QuickMatchRequest {
+    text: String,
+}
+
+async fn quick_match(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<QuickMatchRequest>,
+) -> ApiResult<Json<Value>> {
+    let m = ctl.sup.quick_match(&req.text)?;
+    Ok(Json(
+        json!({ "match": m, "prepared": ctl.sup.quick_pack()?.prepare(&req.text) }),
+    ))
+}
+
+#[derive(Deserialize)]
+struct QuickRunRequest {
+    id: String,
+    #[serde(default)]
+    confirmed: bool,
+}
+
+async fn quick_run(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<QuickRunRequest>,
+) -> ApiResult<Json<crate::supervisor_quick::QuickRunResult>> {
+    Ok(Json(ctl.sup.quick_run(&req.id, req.confirmed).await?))
+}
+
+#[derive(Deserialize)]
+struct VoicesImportRequest {
+    source_dir: String,
+    #[serde(default = "default_voice_name")]
+    name: String,
+}
+
+fn default_voice_name() -> String {
+    crate::supervisor_quick::DEFAULT_VOICE.into()
+}
+
+async fn quick_voices_import(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<VoicesImportRequest>,
+) -> ApiResult<Json<Value>> {
+    let n = ctl
+        .sup
+        .quick_import_voices(Path::new(&req.source_dir), &req.name)?;
+    Ok(Json(json!({ "ok": true, "clips": n, "voice": req.name })))
+}
+
 async fn voice_restart(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
     ctl.sup.voice_restart_server().await?;
     Ok(Json(json!({ "ok": true })))
@@ -727,6 +789,7 @@ mod tests {
             layout,
             script: PathBuf::from("install.ps1"),
             plugins_dir: PathBuf::from("plugins"),
+            quick_pack: PathBuf::from("quick.json"),
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

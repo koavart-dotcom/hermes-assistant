@@ -13,11 +13,13 @@ pub mod hermes_config;
 pub mod ollama;
 pub mod paths;
 pub mod plugins;
+pub mod quick;
 pub mod secrets;
 pub mod setup;
 pub mod status;
 pub mod supervisor;
 pub mod supervisor_chat;
+pub mod supervisor_quick;
 pub mod supervisor_voice;
 pub mod voice;
 

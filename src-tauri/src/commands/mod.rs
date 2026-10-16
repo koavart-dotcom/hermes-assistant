@@ -4,8 +4,10 @@
 
 use hermes_core::chat::{ChatMessage, SessionSummary};
 use hermes_core::gateway::Gateway;
+use hermes_core::quick::{QuickCommandInfo, QuickMatch};
 use hermes_core::setup::{SetupOptions, SetupPlan};
 use hermes_core::status::StatusSnapshot;
+use hermes_core::supervisor_quick::QuickRunResult;
 use hermes_core::voice::VoiceStatus;
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -204,6 +206,49 @@ pub async fn voice_transcribe(
 #[tauri::command]
 pub async fn voice_speak(state: State<'_, AppState>, text: String) -> Result<String, String> {
     state.supervisor.voice_speak(&text).await.map_err(err)
+}
+
+// ----------------------------------------------------------------- quick --
+
+#[tauri::command]
+pub fn quick_commands(state: State<'_, AppState>) -> Result<Vec<QuickCommandInfo>, String> {
+    state.supervisor.quick_commands().map_err(err)
+}
+
+#[tauri::command]
+pub fn quick_match(state: State<'_, AppState>, text: String) -> Result<Option<QuickMatch>, String> {
+    state.supervisor.quick_match(&text).map_err(err)
+}
+
+#[tauri::command]
+pub async fn quick_run(
+    state: State<'_, AppState>,
+    id: String,
+    confirmed: Option<bool>,
+) -> Result<QuickRunResult, String> {
+    state
+        .supervisor
+        .quick_run(&id, confirmed.unwrap_or(false))
+        .await
+        .map_err(err)
+}
+
+/// Copy a folder of `.wav` reactions (e.g. Luxify's `assets\Voices\Jarvis`)
+/// into the app's voice pack.
+#[tauri::command]
+pub fn quick_import_voices(
+    state: State<'_, AppState>,
+    source_dir: String,
+    name: Option<String>,
+) -> Result<usize, String> {
+    state
+        .supervisor
+        .quick_import_voices(
+            std::path::Path::new(&source_dir),
+            name.as_deref()
+                .unwrap_or(hermes_core::supervisor_quick::DEFAULT_VOICE),
+        )
+        .map_err(err)
 }
 
 // ----------------------------------------------------------- permissions --

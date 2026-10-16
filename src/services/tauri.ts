@@ -10,6 +10,9 @@ import type { SetupPlan } from "@/types/generated/SetupPlan";
 import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 import type { VoiceStatus } from "@/types/generated/VoiceStatus";
+import type { QuickCommandInfo } from "@/types/generated/QuickCommandInfo";
+import type { QuickMatch } from "@/types/generated/QuickMatch";
+import type { QuickRunResult } from "@/types/generated/QuickRunResult";
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
@@ -39,6 +42,12 @@ export const api = {
   voiceTranscribe: (audioBase64: string, mimeType = "audio/wav") =>
     invoke<string>("voice_transcribe", { audioBase64, mimeType }),
   voiceSpeak: (text: string) => invoke<string>("voice_speak", { text }),
+
+  quickCommands: () => invoke<QuickCommandInfo[]>("quick_commands"),
+  quickMatch: (text: string) => invoke<QuickMatch | null>("quick_match", { text }),
+  quickRun: (id: string, confirmed = false) => invoke<QuickRunResult>("quick_run", { id, confirmed }),
+  quickImportVoices: (sourceDir: string, name?: string) =>
+    invoke<number>("quick_import_voices", { sourceDir, name: name ?? null }),
 
   permissionsLog: (tail = 200) => invoke<PermissionRecord[]>("permissions_log", { tail }),
   permissionsPolicyGet: () => invoke<Record<string, unknown>>("permissions_policy_get"),

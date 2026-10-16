@@ -144,6 +144,10 @@ pub fn run() {
             commands::voice_setup,
             commands::voice_transcribe,
             commands::voice_speak,
+            commands::quick_commands,
+            commands::quick_match,
+            commands::quick_run,
+            commands::quick_import_voices,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
