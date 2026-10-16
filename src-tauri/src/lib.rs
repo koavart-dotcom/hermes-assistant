@@ -178,6 +178,17 @@ pub fn run() {
             commands::open_url,
             commands::hud_window_open,
             commands::hud_window_close,
+            commands::prefs_get,
+            commands::prefs_set,
+            commands::model_options,
+            commands::model_current,
+            commands::model_apply,
+            commands::model_pull,
+            commands::speech_current,
+            commands::speech_apply,
+            commands::tts_options,
+            commands::voice_packs,
+            commands::voice_pack_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

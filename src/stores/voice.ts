@@ -1,4 +1,13 @@
 import { create } from "zustand";
+import type { Prefs } from "@/types/generated/Prefs";
+
+export const DEFAULT_PREFS: Prefs = {
+  voice_volume: 0.8,
+  silent: false,
+  wake_words: ["джарвис", "гермес", "jarvis", "hermes"],
+  wake_required: true,
+  voice_pack: "Jarvis",
+};
 
 /** How the assistant takes input: text only, push-to-talk, or always listening for a wake word. */
 export type VoiceMode = "chat" | "ptt" | "wake";
@@ -14,6 +23,9 @@ interface VoiceState {
   speak: boolean;
   /** Session the last voice turn was sent to (its answer is spoken). */
   waitingSession: string | null;
+  /** Shell preferences (volume, silent, wake words); loaded from the backend. */
+  prefs: Prefs;
+  setPrefs: (p: Prefs) => void;
   setMode: (mode: VoiceMode) => void;
   setPhase: (phase: VoicePhase) => void;
   setLevel: (level: number) => void;
@@ -46,6 +58,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   error: null,
   speak: read(SPEAK_KEY, ["1", "0"] as const, "1") === "1",
   waitingSession: null,
+  prefs: DEFAULT_PREFS,
+  setPrefs: (prefs) => set({ prefs }),
   setMode: (mode) => {
     try {
       localStorage.setItem(MODE_KEY, mode);

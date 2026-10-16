@@ -79,6 +79,15 @@ Hermes (активные + ожидающие, корзина отброшена
 фраза для озвучки. Без ключей — 500 с подсказкой. Окно «Мои тикеты» в приложении открывает быстрая команда «мои тикеты»
 (действие `ui:tickets`, Tauri-команда `tickets_window_open`); через API окно не открыть (нужен Tauri).
 
+**Настройки (с v0.14.0):** `GET`/`PUT /prefs` — настройки оболочки (`Prefs`: `voice_volume` 0..1, `silent`, `wake_words`,
+`wake_required`, `voice_pack`), файл `settings.json` в данных оболочки; `GET /models/options` — выбор моделей (локальные
+Ollama, Jarvis Deka, Anthropic/OpenAI/Gemini с именем нужного ключа), `GET`/`PUT /models/current` (`{provider, model,
+base_url}`, запись через `hermes config set` + перезапуск gateway), `POST /models/pull {tag}` → 202, прогресс в
+`/setup/events` (`model: ready <tag>` в конце); `GET`/`PUT /speech` (`{stt_provider, stt_model, stt_language, tts_provider,
+tts_voice}`, перезапуск сервера голоса), `GET /speech/tts-options`; `GET /voice/packs` (установленные наборы реакций и
+доступные для импорта из Luxify), `POST /voice/packs/import {name}`. `hermesctl prefs|models|model|model-set|model-pull|
+speech|speech-set|voice-packs|voice-pack-import`.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

@@ -10,6 +10,8 @@
 #   tools/hermesctl.sh cli config get model.default      # any `hermes ...` command
 #   tools/hermesctl.sh config-get | config-put <file> | env
 #   tools/hermesctl.sh quick-run web.google курс доллара  # parametrised quick command
+#   tools/hermesctl.sh prefs | models | model | model-set custom qwen3.5 http://127.0.0.1:11437/v1 | model-pull TAG
+#   tools/hermesctl.sh speech | speech-set small ru piper ru_RU-irina-medium | voice-packs | voice-pack-import Friday
 #   tools/hermesctl.sh tickets                           # FreeScout: mine + unassigned
 #   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
 #   tools/hermesctl.sh raw GET /status                   # any endpoint
@@ -88,6 +90,16 @@ case "${cmd}" in
   key-del)       call DELETE "/hermes/env/keys/${1:?NAME}" ;;
   gateway-restart) call POST /gateway/restart ;;
   tickets)       call GET /freescout/tickets ;;
+  prefs)         call GET /prefs ;;
+  prefs-put)     call PUT /prefs "@${1:?json file}" ;;
+  models)        call GET /models/options ;;
+  model)         call GET /models/current ;;
+  model-set)     call PUT /models/current "{\"provider\":\"${1:?provider}\",\"model\":\"${2:?model}\",\"base_url\":\"${3:-}\"}" ;;
+  model-pull)    call POST /models/pull "{\"tag\":\"${1:?tag}\"}" ;;
+  speech)        call GET /speech ;;
+  speech-set)    call PUT /speech "{\"stt_provider\":\"local\",\"stt_model\":\"${1:?stt model}\",\"stt_language\":\"${2:?lang}\",\"tts_provider\":\"${3:?tts provider}\",\"tts_voice\":\"${4:?voice}\"}" ;;
+  voice-packs)   call GET /voice/packs ;;
+  voice-pack-import) call POST /voice/packs/import "{\"name\":\"${1:?name}\"}" ;;
   chat-sessions) call GET /chat/sessions ;;
   chat-new)      body="$(printf '%s' "${1:-}" | python3 -c 'import json,sys; t=sys.stdin.read(); print(json.dumps({"title": t or None}))')"
                  call POST /chat/sessions "${body}" ;;

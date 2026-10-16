@@ -97,6 +97,14 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/hermes/env/presets", get(env_keys_presets))
         .route("/gateway/restart", post(gateway_restart))
         .route("/freescout/tickets", get(freescout_tickets))
+        .route("/prefs", get(prefs_get).put(prefs_put))
+        .route("/models/options", get(models_options))
+        .route("/models/current", get(models_current).put(models_apply))
+        .route("/models/pull", post(models_pull))
+        .route("/speech", get(speech_get).put(speech_apply))
+        .route("/speech/tts-options", get(speech_tts_options))
+        .route("/voice/packs", get(voice_packs))
+        .route("/voice/packs/import", post(voice_packs_import))
         .route("/logs", get(logs))
         .route(
             "/chat/sessions",
@@ -311,6 +319,85 @@ async fn freescout_tickets(
     State(ctl): State<Arc<Ctl>>,
 ) -> ApiResult<Json<crate::freescout::TicketsSnapshot>> {
     Ok(Json(ctl.sup.freescout_tickets().await?))
+}
+
+// ------------------------------------------------------------ settings --
+
+async fn prefs_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::prefs::Prefs> {
+    Json(ctl.sup.prefs())
+}
+
+async fn prefs_put(
+    State(ctl): State<Arc<Ctl>>,
+    Json(p): Json<crate::prefs::Prefs>,
+) -> ApiResult<Json<crate::prefs::Prefs>> {
+    Ok(Json(ctl.sup.prefs_set(&p)?))
+}
+
+async fn models_options(
+    State(ctl): State<Arc<Ctl>>,
+) -> ApiResult<Json<Vec<crate::models::ModelOption>>> {
+    Ok(Json(ctl.sup.model_options().await?))
+}
+
+async fn models_current(State(ctl): State<Arc<Ctl>>) -> Json<crate::models::ModelSettings> {
+    Json(ctl.sup.model_current())
+}
+
+async fn models_apply(
+    State(ctl): State<Arc<Ctl>>,
+    Json(s): Json<crate::models::ModelSettings>,
+) -> ApiResult<Json<crate::models::ModelSettings>> {
+    Ok(Json(ctl.sup.model_apply(&s).await?))
+}
+
+#[derive(Deserialize)]
+struct PullRequest {
+    tag: String,
+}
+
+async fn models_pull(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<PullRequest>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    let fut = ctl.sup.model_pull(&req.tag)?;
+    tokio::spawn(fut);
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(json!({ "ok": true, "tag": req.tag })),
+    ))
+}
+
+async fn speech_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::models::SpeechSettings> {
+    Json(ctl.sup.speech_current())
+}
+
+async fn speech_apply(
+    State(ctl): State<Arc<Ctl>>,
+    Json(s): Json<crate::models::SpeechSettings>,
+) -> ApiResult<Json<crate::models::SpeechSettings>> {
+    Ok(Json(ctl.sup.speech_apply(&s).await?))
+}
+
+async fn speech_tts_options() -> Json<Vec<crate::models::TtsProviderOption>> {
+    Json(crate::models::tts_options())
+}
+
+async fn voice_packs(State(ctl): State<Arc<Ctl>>) -> Json<crate::supervisor_settings::VoicePacks> {
+    Json(ctl.sup.voice_packs())
+}
+
+#[derive(Deserialize)]
+struct PackImport {
+    name: String,
+}
+
+async fn voice_packs_import(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<PackImport>,
+) -> ApiResult<Json<Value>> {
+    let n = ctl.sup.voice_pack_import(&req.name)?;
+    Ok(Json(json!({ "ok": true, "name": req.name, "clips": n })))
 }
 
 // ------------------------------------------------------- API keys (.env) --

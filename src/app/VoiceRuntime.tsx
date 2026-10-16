@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { emitVoiceState, isTauri, onChatEvent, onHudPtt } from "@/services/tauri";
-import { applyMode, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
+import { applyMode, loadPrefs, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
 import { useVoiceStore } from "@/stores/voice";
 
 /**
@@ -13,7 +13,7 @@ export function VoiceRuntime() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    void applyMode();
+    void loadPrefs().then(applyMode);
   }, [mode]);
 
   useEffect(() => {

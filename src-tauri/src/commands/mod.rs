@@ -6,10 +6,13 @@ use hermes_core::chat::{ChatMessage, SessionSummary};
 use hermes_core::envkeys::{EnvKey, EnvPreset};
 use hermes_core::freescout::TicketsSnapshot;
 use hermes_core::gateway::Gateway;
+use hermes_core::models::{ModelOption, ModelSettings, SpeechSettings, TtsProviderOption};
+use hermes_core::prefs::Prefs;
 use hermes_core::quick::{QuickCommandInfo, QuickMatch};
 use hermes_core::setup::{SetupOptions, SetupPlan};
 use hermes_core::status::StatusSnapshot;
 use hermes_core::supervisor_quick::QuickRunResult;
+use hermes_core::supervisor_settings::VoicePacks;
 use hermes_core::voice::VoiceStatus;
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -433,6 +436,72 @@ pub async fn hud_window_close(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn open_url(url: String) -> Result<(), String> {
     hermes_core::quick::open_url(&url).await.map_err(err)
+}
+
+// ------------------------------------------------------------ settings --
+
+#[tauri::command]
+pub fn prefs_get(state: State<'_, AppState>) -> Prefs {
+    state.supervisor.prefs()
+}
+
+#[tauri::command]
+pub fn prefs_set(state: State<'_, AppState>, prefs: Prefs) -> Result<Prefs, String> {
+    state.supervisor.prefs_set(&prefs).map_err(err)
+}
+
+#[tauri::command]
+pub async fn model_options(state: State<'_, AppState>) -> Result<Vec<ModelOption>, String> {
+    state.supervisor.model_options().await.map_err(err)
+}
+
+#[tauri::command]
+pub fn model_current(state: State<'_, AppState>) -> ModelSettings {
+    state.supervisor.model_current()
+}
+
+#[tauri::command]
+pub async fn model_apply(
+    state: State<'_, AppState>,
+    settings: ModelSettings,
+) -> Result<ModelSettings, String> {
+    state.supervisor.model_apply(&settings).await.map_err(err)
+}
+
+/// Starts `ollama pull`; progress arrives as `setup:event` logs, `model: ready <tag>` at the end.
+#[tauri::command]
+pub fn model_pull(state: State<'_, AppState>, tag: String) -> Result<(), String> {
+    let fut = state.supervisor.model_pull(&tag).map_err(err)?;
+    tauri::async_runtime::spawn(fut);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn speech_current(state: State<'_, AppState>) -> SpeechSettings {
+    state.supervisor.speech_current()
+}
+
+#[tauri::command]
+pub async fn speech_apply(
+    state: State<'_, AppState>,
+    settings: SpeechSettings,
+) -> Result<SpeechSettings, String> {
+    state.supervisor.speech_apply(&settings).await.map_err(err)
+}
+
+#[tauri::command]
+pub fn tts_options() -> Vec<TtsProviderOption> {
+    hermes_core::models::tts_options()
+}
+
+#[tauri::command]
+pub fn voice_packs(state: State<'_, AppState>) -> VoicePacks {
+    state.supervisor.voice_packs()
+}
+
+#[tauri::command]
+pub fn voice_pack_import(state: State<'_, AppState>, name: String) -> Result<usize, String> {
+    state.supervisor.voice_pack_import(&name).map_err(err)
 }
 
 #[cfg(test)]

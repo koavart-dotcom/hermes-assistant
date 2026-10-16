@@ -4,6 +4,12 @@ import type { AppInfo } from "@/types/generated/AppInfo";
 import type { EnvKey } from "@/types/generated/EnvKey";
 import type { EnvPreset } from "@/types/generated/EnvPreset";
 import type { TicketsSnapshot } from "@/types/generated/TicketsSnapshot";
+import type { Prefs } from "@/types/generated/Prefs";
+import type { ModelOption } from "@/types/generated/ModelOption";
+import type { ModelSettings } from "@/types/generated/ModelSettings";
+import type { SpeechSettings } from "@/types/generated/SpeechSettings";
+import type { TtsProviderOption } from "@/types/generated/TtsProviderOption";
+import type { VoicePacks } from "@/types/generated/VoicePacks";
 import type { ChatEnvelope } from "@/types/generated/ChatEnvelope";
 import type { ChatMessage } from "@/types/generated/ChatMessage";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
@@ -72,6 +78,18 @@ export const api = {
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   hudWindowOpen: () => invoke<void>("hud_window_open"),
   hudWindowClose: () => invoke<void>("hud_window_close"),
+
+  prefsGet: () => invoke<Prefs>("prefs_get"),
+  prefsSet: (prefs: Prefs) => invoke<Prefs>("prefs_set", { prefs }),
+  modelOptions: () => invoke<ModelOption[]>("model_options"),
+  modelCurrent: () => invoke<ModelSettings>("model_current"),
+  modelApply: (settings: ModelSettings) => invoke<ModelSettings>("model_apply", { settings }),
+  modelPull: (tag: string) => invoke<void>("model_pull", { tag }),
+  speechCurrent: () => invoke<SpeechSettings>("speech_current"),
+  speechApply: (settings: SpeechSettings) => invoke<SpeechSettings>("speech_apply", { settings }),
+  ttsOptions: () => invoke<TtsProviderOption[]>("tts_options"),
+  voicePacks: () => invoke<VoicePacks>("voice_packs"),
+  voicePackImport: (name: string) => invoke<number>("voice_pack_import", { name }),
 };
 
 /** One decision line of the hermes_permissions plugin (hermes_permissions.log). */

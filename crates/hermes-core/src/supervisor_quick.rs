@@ -86,7 +86,10 @@ impl Supervisor {
             )));
         }
         let voice = self.quick_voice();
+        let prefs = self.prefs();
         let mut ex = Executor::new(self.ctx.layout.clone(), voice);
+        ex.volume = prefs.voice_volume;
+        ex.silent = prefs.silent;
         // Remember what was searched so "включи первое видео" can follow.
         if let Some(q) = query {
             if cmd.id.starts_with("web.")
@@ -131,9 +134,14 @@ impl Supervisor {
         })
     }
 
-    /// Voice set: `voice-pack/<name>` — the first existing one, default Jarvis.
+    /// Voice set: the one chosen in settings if it exists, else Jarvis, else
+    /// the first `voice-pack/<name>` folder.
     pub fn quick_voice(&self) -> String {
         let dir = quick::voice_pack_dir(&self.ctx.layout);
+        let chosen = self.prefs().voice_pack;
+        if dir.join(&chosen).is_dir() {
+            return chosen;
+        }
         if dir.join(DEFAULT_VOICE).is_dir() {
             return DEFAULT_VOICE.to_string();
         }

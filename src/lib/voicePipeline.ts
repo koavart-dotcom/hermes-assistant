@@ -169,7 +169,7 @@ export async function showUi(target: string): Promise<void> {
 export async function speakAnswer(content: string): Promise<void> {
   const v = useVoiceStore.getState();
   v.setAnswer(content);
-  if (!v.speak || !content.trim()) {
+  if (!v.speak || v.prefs.silent || !content.trim()) {
     v.setPhase(idlePhase());
     return;
   }
@@ -178,6 +178,7 @@ export async function speakAnswer(content: string): Promise<void> {
     const url = await api.voiceSpeak(content);
     stopSpeaking();
     const a = new Audio(url);
+    a.volume = Math.min(1, Math.max(0, v.prefs.voice_volume));
     audio = a;
     watchSpeechLevel(a);
     const done = () => {
@@ -266,8 +267,20 @@ export async function startWakeListening(): Promise<void> {
       st.setPhase("transcribing");
       transcribeSamples(utterance, sampleRate)
         .then(async (text) => {
-          const cmd = stripWakeWord(text);
+          const prefs = useVoiceStore.getState().prefs;
+          const cmd = stripWakeWord(text, prefs.wake_words);
           if (cmd === null) {
+            // Without the wake word only quick commands may run (if allowed in settings).
+            if (!prefs.wake_required && text.trim()) {
+              const q = await api.quickMatch(text);
+              if (q && !q.needs_confirm) {
+                if (q.stops_speech) stopSpeaking();
+                const r = await api.quickRun(q.id, false, q.query);
+                useVoiceStore.getState().setTranscript(text);
+                useVoiceStore.getState().setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
+                if (r.ui) await showUi(r.ui);
+              }
+            }
             useVoiceStore.getState().setPhase("listening");
             return;
           }
@@ -295,6 +308,15 @@ export async function stopWakeListening(): Promise<void> {
   if (m) await m.close();
   const v = useVoiceStore.getState();
   if (v.phase === "listening" || v.phase === "recording") v.setPhase("idle");
+}
+
+/** Load shell preferences into the store (called at start and after Settings saves). */
+export async function loadPrefs(): Promise<void> {
+  try {
+    useVoiceStore.getState().setPrefs(await api.prefsGet());
+  } catch (e) {
+    reportError("prefs", errorText(e));
+  }
 }
 
 /** Keep the listener in sync with the selected mode. */

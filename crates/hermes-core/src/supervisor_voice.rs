@@ -20,21 +20,14 @@ impl Supervisor {
 
     pub async fn voice_status(&self) -> Result<VoiceStatus> {
         let vs = self.voice_server()?;
-        let settings = crate::voice::settings();
-        let get = |k: &str| {
-            settings
-                .iter()
-                .find(|(key, _)| key == k)
-                .map(|(_, v)| v.clone())
-                .unwrap_or_default()
-        };
+        let sp = crate::models::current_speech(&self.ctx.layout);
         Ok(VoiceStatus {
             hermes_installed: self.ctx.layout.bootstrap_marker().exists(),
             deps_ready: vs.deps_ready(),
             server_running: vs.is_running().await,
-            stt_provider: get("stt.provider"),
-            tts_provider: get("tts.provider"),
-            tts_voice: get("tts.piper.voice"),
+            stt_provider: format!("{} {}", sp.stt_provider, sp.stt_model),
+            tts_provider: sp.tts_provider,
+            tts_voice: sp.tts_voice,
         })
     }
 

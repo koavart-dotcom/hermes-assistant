@@ -552,6 +552,9 @@ pub struct Executor {
     /// Last search query (set by the supervisor for `web.*` commands) so
     /// "включи первое видео" / "открой вторую ссылку" know what to pick.
     pub last_query: Option<String>,
+    /// Reaction clip volume 0..1 and the silent switch (from preferences).
+    pub volume: f64,
+    pub silent: bool,
 }
 
 /// What the shell should do after the actions ran.
@@ -569,6 +572,8 @@ impl Executor {
             layout,
             voice: voice.into(),
             last_query: None,
+            volume: 1.0,
+            silent: false,
         }
     }
 
@@ -611,8 +616,11 @@ impl Executor {
                 }
                 Action::TypeText(t) => platform::type_text(t).await?,
                 Action::Say(clip) => {
+                    if self.silent {
+                        continue;
+                    }
                     if let Some(path) = clip_path(&self.layout, &self.voice, clip) {
-                        platform::play_wav(&path).await?;
+                        platform::play_wav(&path, self.volume).await?;
                     } else {
                         log::debug!(target: "quick", "no clip for `{clip}` (voice {})", self.voice);
                     }
@@ -670,10 +678,23 @@ mod platform {
         s.replace('\'', "''")
     }
 
-    pub async fn play_wav(path: &Path) -> Result<()> {
+    /// Play a clip; below full volume a WPF MediaPlayer is used (SoundPlayer
+    /// has no volume control).
+    pub async fn play_wav(path: &Path, volume: f64) -> Result<()> {
         let p = q(&path.display().to_string());
+        if volume >= 0.99 {
+            return ps(&format!(
+                "$p = New-Object System.Media.SoundPlayer '{p}'; $p.PlaySync()"
+            ))
+            .await;
+        }
+        let v = volume.clamp(0.0, 1.0);
         ps(&format!(
-            "$p = New-Object System.Media.SoundPlayer '{p}'; $p.PlaySync()"
+            "Add-Type -AssemblyName PresentationCore; $m = New-Object System.Windows.Media.MediaPlayer; \
+             $m.Open([Uri]'{p}'); $m.Volume = {v}; $i = 0; \
+             while (-not $m.NaturalDuration.HasTimeSpan -and $i -lt 100) {{ Start-Sleep -Milliseconds 20; $i++ }}; \
+             $m.Play(); $ms = if ($m.NaturalDuration.HasTimeSpan) {{ $m.NaturalDuration.TimeSpan.TotalMilliseconds }} else {{ 3000 }}; \
+             Start-Sleep -Milliseconds ([int]$ms + 150); $m.Close()"
         ))
         .await
     }
@@ -941,7 +962,7 @@ mod platform {
         log::info!(target: "quick", "skipped on this OS: {what}");
         Ok(())
     }
-    pub async fn play_wav(p: &Path) -> Result<()> {
+    pub async fn play_wav(p: &Path, _volume: f64) -> Result<()> {
         skip(&format!("play {}", p.display()))
     }
     pub async fn press(chord: &[String]) -> Result<()> {

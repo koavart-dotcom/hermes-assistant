@@ -4,6 +4,9 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { PageShell } from "@/app/PageShell";
 import { Button } from "@/components/ui/button";
 import { EnvKeysSection } from "@/features/settings/EnvKeysSection";
+import { ModelSection } from "@/features/settings/ModelSection";
+import { SpeechSection } from "@/features/settings/SpeechSection";
+import { VoiceSection } from "@/features/settings/VoiceSection";
 import { api, isTauri } from "@/services/tauri";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 
@@ -44,7 +47,7 @@ export function SettingsPage() {
   return (
     <PageShell
       title="Настройки"
-      description="Обновления, автозапуск, ключи доступа к сервисам. Модели и горячие клавиши появятся позже."
+      description="Модель, распознавание и озвучка, голос Джарвиса, ключи сервисов, обновления."
     >
       <section className="max-w-xl space-y-3 text-sm">
         <h2 className="font-semibold">Обновления</h2>
@@ -96,6 +99,9 @@ export function SettingsPage() {
         </p>
       </section>
 
+      <ModelSection />
+      <SpeechSection />
+      <VoiceSection />
       <EnvKeysSection />
     </PageShell>
   );
