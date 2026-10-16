@@ -69,6 +69,7 @@ export async function handleUtterance(text: string): Promise<void> {
       const r = await api.quickRun(quick.id, false);
       v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
       v.setPhase(idlePhase());
+      if (r.ui) await showUi(r.ui);
       return;
     }
     let sessionId = chat.activeId;
@@ -96,8 +97,23 @@ export async function confirmPendingQuick(yes: boolean): Promise<void> {
   try {
     const r = await api.quickRun(q.id, true);
     v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
+    if (r.ui) await showUi(r.ui);
   } catch (e) {
     v.setError(errorText(e));
+  }
+}
+
+/** UI targets of quick commands (`ui:tickets`): open the window, speak the summary. */
+export async function showUi(target: string): Promise<void> {
+  const v = useVoiceStore.getState();
+  if (target !== "tickets") return;
+  try {
+    await api.ticketsWindowOpen();
+    const snap = await api.ticketsFetch();
+    await speakAnswer(snap.summary);
+  } catch (e) {
+    v.setError(errorText(e));
+    v.setPhase(idlePhase());
   }
 }
 

@@ -25,6 +25,8 @@ pub struct QuickRunResult {
     pub ok: bool,
     pub error: Option<String>,
     pub stops_speech: bool,
+    /// UI target requested by the command (`tickets`), handled by the shell.
+    pub ui: Option<String>,
 }
 
 pub fn user_pack_path(layout: &crate::Layout) -> PathBuf {
@@ -92,6 +94,10 @@ impl Supervisor {
             ok,
             error,
             stops_speech: actions.iter().any(|a| matches!(a, Action::StopSpeech)),
+            ui: actions.iter().find_map(|a| match a {
+                Action::Ui(t) => Some(t.clone()),
+                _ => None,
+            }),
         })
     }
 
@@ -140,5 +146,17 @@ impl Supervisor {
             use std::io::Write as _;
             let _ = writeln!(f, "{line}");
         }
+    }
+}
+
+impl Supervisor {
+    /// Tickets from FreeScout using the keys in Hermes' `.env`.
+    pub async fn freescout_tickets(&self) -> Result<crate::freescout::TicketsSnapshot> {
+        let cfg = crate::freescout::config(&self.ctx.layout)?.ok_or_else(|| {
+            CoreError::Other(
+                "FreeScout не настроен: задайте FREESCOUT_URL и FREESCOUT_API_KEY в «Настройки → Интеграции и ключи»".into(),
+            )
+        })?;
+        crate::freescout::Client::new(cfg).snapshot().await
     }
 }

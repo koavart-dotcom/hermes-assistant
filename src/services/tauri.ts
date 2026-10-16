@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppInfo } from "@/types/generated/AppInfo";
 import type { EnvKey } from "@/types/generated/EnvKey";
 import type { EnvPreset } from "@/types/generated/EnvPreset";
+import type { TicketsSnapshot } from "@/types/generated/TicketsSnapshot";
 import type { ChatEnvelope } from "@/types/generated/ChatEnvelope";
 import type { ChatMessage } from "@/types/generated/ChatMessage";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
@@ -65,6 +66,10 @@ export const api = {
   envKeysSet: (name: string, value: string) => invoke<void>("env_keys_set", { name, value }),
   envKeysRemove: (name: string) => invoke<void>("env_keys_remove", { name }),
   gatewayRestart: () => invoke<void>("gateway_restart"),
+
+  ticketsFetch: () => invoke<TicketsSnapshot>("tickets_fetch"),
+  ticketsWindowOpen: () => invoke<void>("tickets_window_open"),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
 };
 
 /** One decision line of the hermes_permissions plugin (hermes_permissions.log). */

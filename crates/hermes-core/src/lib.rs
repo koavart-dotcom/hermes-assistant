@@ -9,6 +9,7 @@ pub mod control;
 pub mod envkeys;
 pub mod error;
 pub mod events;
+pub mod freescout;
 pub mod gateway;
 pub mod hermes_config;
 pub mod ollama;

@@ -68,6 +68,12 @@ default}}`); плагин читает файл при каждом вызове
 `.env` gateway читает при старте, поэтому после изменений нужен `POST /gateway/restart` (стоп + старт).
 Сами значения ключей в логах и ответах API не появляются.
 
+**Хелпдеск (с v0.10.0, этап 7):** `GET /freescout/tickets` — `TicketsSnapshot` `{fetched_at, my_user_id, mine: [Ticket],
+unassigned: [Ticket], summary}` из FreeScout по ключам `FREESCOUT_URL`/`FREESCOUT_API_KEY`/`FREESCOUT_MY_USER_ID` в `.env`
+Hermes (активные + ожидающие, корзина отброшена, `mark: new|updated|working` по сегодняшнему дню UTC); `summary` —
+фраза для озвучки. Без ключей — 500 с подсказкой. Окно «Мои тикеты» в приложении открывает быстрая команда «мои тикеты»
+(действие `ui:tickets`, Tauri-команда `tickets_window_open`); через API окно не открыть (нужен Tauri).
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

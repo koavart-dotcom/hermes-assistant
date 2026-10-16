@@ -153,6 +153,9 @@ pub fn run() {
             commands::quick_match,
             commands::quick_run,
             commands::quick_import_voices,
+            commands::tickets_fetch,
+            commands::tickets_window_open,
+            commands::open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

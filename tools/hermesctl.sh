@@ -9,6 +9,7 @@
 #   tools/hermesctl.sh cancel | gateway-start | gateway-stop
 #   tools/hermesctl.sh cli config get model.default      # any `hermes ...` command
 #   tools/hermesctl.sh config-get | config-put <file> | env
+#   tools/hermesctl.sh tickets                           # FreeScout: mine + unassigned
 #   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
 #   tools/hermesctl.sh raw GET /status                   # any endpoint
 #
@@ -85,6 +86,7 @@ case "${cmd}" in
                  call PUT /hermes/env/keys "$body" ;;
   key-del)       call DELETE "/hermes/env/keys/${1:?NAME}" ;;
   gateway-restart) call POST /gateway/restart ;;
+  tickets)       call GET /freescout/tickets ;;
   chat-sessions) call GET /chat/sessions ;;
   chat-new)      body="$(printf '%s' "${1:-}" | python3 -c 'import json,sys; t=sys.stdin.read(); print(json.dumps({"title": t or None}))')"
                  call POST /chat/sessions "${body}" ;;

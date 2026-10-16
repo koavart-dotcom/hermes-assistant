@@ -3,4 +3,8 @@
 /**
  * Result of running a quick command.
  */
-export type QuickRunResult = { id: string, name: string, ok: boolean, error: string | null, stops_speech: boolean, };
+export type QuickRunResult = { id: string, name: string, ok: boolean, error: string | null, stops_speech: boolean, 
+/**
+ * UI target requested by the command (`tickets`), handled by the shell.
+ */
+ui: string | null, };

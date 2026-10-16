@@ -5,6 +5,7 @@ import { Loader2, Plus, Send, Square, Trash2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ticketsMarkdown } from "@/features/tickets/ticketsText";
 import { api, isTauri, type ApprovalChoice } from "@/services/tauri";
 import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
@@ -109,6 +110,11 @@ export function ChatPage() {
         }
         const r = await api.quickRun(quick.id, false);
         addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
+        if (r.ui === "tickets") {
+          await api.ticketsWindowOpen();
+          const snap = await api.ticketsFetch();
+          addAssistantTurn(sessionId, ticketsMarkdown(snap));
+        }
         return;
       }
       await api.chatSend(sessionId, text);

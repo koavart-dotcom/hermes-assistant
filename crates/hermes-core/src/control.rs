@@ -96,6 +96,7 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         )
         .route("/hermes/env/presets", get(env_keys_presets))
         .route("/gateway/restart", post(gateway_restart))
+        .route("/freescout/tickets", get(freescout_tickets))
         .route("/logs", get(logs))
         .route(
             "/chat/sessions",
@@ -304,6 +305,12 @@ async fn gateway_stop(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
 async fn gateway_restart(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
     ctl.sup.gateway_restart().await?;
     Ok(Json(json!({ "ok": true })))
+}
+
+async fn freescout_tickets(
+    State(ctl): State<Arc<Ctl>>,
+) -> ApiResult<Json<crate::freescout::TicketsSnapshot>> {
+    Ok(Json(ctl.sup.freescout_tickets().await?))
 }
 
 // ------------------------------------------------------- API keys (.env) --

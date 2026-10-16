@@ -178,7 +178,8 @@ delegation/connections/skills/tts (`hermes tools disable <ts> --platform api_ser
 по кнопке / всегда слушает с wake word «Джарвис»/«Гермес», VAD в `src/lib/vad.ts`, `VoiceRuntime` в Layout).
 **v0.9.1** — «Настройки» → «Интеграции и ключи»: ключи сервисов (FreeScout, Telegram, облачные провайдеры,
 свои переменные) пишутся в `.env` Hermes через `hermes-core::envkeys`, маскируются, после изменения —
-«Перезапустить Hermes»; Control API `/hermes/env/keys`, `/gateway/restart`. MCP-мост Hermes → Claude Code
+«Перезапустить Hermes»; Control API `/hermes/env/keys`, `/gateway/restart`. **v0.10.0** — окно «Мои тикеты» (`hermes-core::freescout`, read-only; быстрая команда «мои тикеты» → действие `ui:tickets`
+→ окно `tickets` поверх всех + озвучка сводки; `GET /freescout/tickets`). MCP-мост Hermes → Claude Code
 (`tools/mcp-claude-bridge`, сервис `claude-bridge` на 8650, подписка Pro) настроен, сквозной тест не сделан.
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета

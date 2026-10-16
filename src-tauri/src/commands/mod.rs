@@ -4,6 +4,7 @@
 
 use hermes_core::chat::{ChatMessage, SessionSummary};
 use hermes_core::envkeys::{EnvKey, EnvPreset};
+use hermes_core::freescout::TicketsSnapshot;
 use hermes_core::gateway::Gateway;
 use hermes_core::quick::{QuickCommandInfo, QuickMatch};
 use hermes_core::setup::{SetupOptions, SetupPlan};
@@ -322,6 +323,44 @@ pub fn env_keys_remove(state: State<'_, AppState>, name: String) -> Result<(), S
 #[tauri::command]
 pub async fn gateway_restart(state: State<'_, AppState>) -> Result<(), String> {
     state.supervisor.gateway_restart().await.map_err(err)
+}
+
+// ------------------------------------------------------------- tickets --
+
+pub const TICKETS_WINDOW: &str = "tickets";
+
+#[tauri::command]
+pub async fn tickets_fetch(state: State<'_, AppState>) -> Result<TicketsSnapshot, String> {
+    state.supervisor.freescout_tickets().await.map_err(err)
+}
+
+/// Small always-on-top window with the ticket list; focused if already open.
+#[tauri::command]
+pub fn tickets_window_open(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window(TICKETS_WINDOW) {
+        let _ = w.unminimize();
+        w.show().map_err(err)?;
+        w.set_focus().map_err(err)?;
+        return Ok(());
+    }
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        TICKETS_WINDOW,
+        tauri::WebviewUrl::App("index.html#/tickets".into()),
+    )
+    .title("Мои тикеты")
+    .inner_size(480.0, 680.0)
+    .min_inner_size(360.0, 400.0)
+    .always_on_top(true)
+    .build()
+    .map_err(err)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), String> {
+    hermes_core::quick::open_url(&url).await.map_err(err)
 }
 
 #[cfg(test)]

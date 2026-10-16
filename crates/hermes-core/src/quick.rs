@@ -239,6 +239,8 @@ pub enum Action {
     Restart,
     Shutdown,
     StopSpeech,
+    /// Ask the shell UI to open something (`tickets`); no-op in the executor.
+    Ui(String),
 }
 
 pub const KEY_NAMES: &[&str] = &[
@@ -312,12 +314,28 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "restart" => Action::Restart,
         "shutdown" => Action::Shutdown,
         "stop_speech" => Action::StopSpeech,
+        "ui" => {
+            if !matches!(arg, "tickets") {
+                return Err(format!("unknown ui target `{arg}`"));
+            }
+            Action::Ui(arg.to_string())
+        }
         other => return Err(format!("unknown action `{other}`")),
     })
 }
 
 pub fn is_dangerous(a: &Action) -> bool {
     matches!(a, Action::Sleep | Action::Restart | Action::Shutdown)
+}
+
+/// Open `url` in the default browser (used by the UI for ticket links).
+pub async fn open_url(url: &str) -> Result<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(CoreError::Other(format!(
+            "refusing to open `{url}`: not http(s)"
+        )));
+    }
+    platform::open_url(url).await
 }
 
 // --------------------------------------------------------------- executor --
@@ -411,7 +429,7 @@ impl Executor {
                 Action::Sleep => platform::power("sleep").await?,
                 Action::Restart => platform::power("restart").await?,
                 Action::Shutdown => platform::power("shutdown").await?,
-                Action::StopSpeech => {}
+                Action::StopSpeech | Action::Ui(_) => {}
             }
         }
         Ok(())
