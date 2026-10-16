@@ -8,6 +8,23 @@ pub mod update;
 
 use hermes_core::control::{self, ControlConfig};
 use tauri::{Emitter, Manager};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+/// Event the webview gets for the global push-to-talk key: `{down: bool}`.
+pub const HOTKEY_EVENT: &str = "hotkey:ptt";
+
+/// Register `shortcut` as the only global shortcut (empty = none).
+pub fn apply_hotkey(app: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
+    let gs = app.global_shortcut();
+    gs.unregister_all().map_err(|e| e.to_string())?;
+    let s = shortcut.trim();
+    if s.is_empty() {
+        return Ok(());
+    }
+    gs.register(s).map_err(|e| format!("hotkey `{s}`: {e}"))?;
+    log::info!("global hotkey registered: {s}");
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +37,14 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    let down = matches!(event.state(), ShortcutState::Pressed);
+                    let _ = app.emit(HOTKEY_EVENT, serde_json::json!({ "down": down }));
+                })
+                .build(),
+        )
         // Every webview reports page loads; JS errors are forwarded by main.tsx.
         .on_page_load(|webview, payload| {
             log::info!(
@@ -44,6 +69,12 @@ pub fn run() {
             let state = state::AppState::init(app.handle())?;
             let sup = state.supervisor.clone();
             app.manage(state);
+
+            // Global push-to-talk key from preferences.
+            let hotkey = sup.prefs().hotkey;
+            if let Err(e) = apply_hotkey(app.handle(), &hotkey) {
+                log::warn!("{e}");
+            }
 
             // Forward supervisor events to the webview.
             let handle = app.handle().clone();
@@ -183,6 +214,7 @@ pub fn run() {
             commands::digest_run,
             commands::prefs_get,
             commands::prefs_set,
+            commands::hotkey_apply,
             commands::model_options,
             commands::model_current,
             commands::model_apply,

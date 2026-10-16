@@ -84,6 +84,7 @@ export const api = {
 
   digestRun: (telegram: boolean) => invoke<DigestResult>("digest_run", { telegram }),
   prefsGet: () => invoke<Prefs>("prefs_get"),
+  hotkeyApply: (shortcut: string) => invoke<void>("hotkey_apply", { shortcut }),
   prefsSet: (prefs: Prefs) => invoke<Prefs>("prefs_set", { prefs }),
   modelOptions: () => invoke<ModelOption[]>("model_options"),
   modelCurrent: () => invoke<ModelSettings>("model_current"),
@@ -163,6 +164,11 @@ export interface VoiceStateEvent {
 export const VOICE_STATE_EVENT = "voice:state";
 /** Button presses in the HUD window → main window (push-to-talk). */
 export const HUD_PTT_EVENT = "hud:ptt";
+/** Global push-to-talk key (registered in Rust) → `{down}`. */
+export const HOTKEY_EVENT = "hotkey:ptt";
+export function onHotkey(handler: (down: boolean) => void): Promise<UnlistenFn> {
+  return listen<{ down: boolean }>(HOTKEY_EVENT, (e) => handler(e.payload.down));
+}
 
 export function emitVoiceState(state: VoiceStateEvent): Promise<void> {
   return emit(VOICE_STATE_EVENT, state);

@@ -28,6 +28,8 @@ pub struct Prefs {
     pub digest: Digest,
     /// Project name (from the bridge's projects.json) for «попроси Клода …».
     pub claude_project: String,
+    /// Global push-to-talk shortcut (Tauri syntax, e.g. `CommandOrControl+Shift+Space`); empty = off.
+    pub hotkey: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
@@ -69,6 +71,7 @@ impl Default for Prefs {
             voice_pack: "Jarvis".into(),
             digest: Digest::default(),
             claude_project: "hermes-assistant".into(),
+            hotkey: "CommandOrControl+Shift+Space".into(),
         }
     }
 }
@@ -146,6 +149,7 @@ mod tests {
                 telegram: false,
             },
             claude_project: "hermes-assistant".into(),
+            hotkey: "Ctrl+Alt+J".into(),
         };
         let saved = save(&layout, &p).unwrap();
         assert_eq!(saved.voice_volume, 1.0);

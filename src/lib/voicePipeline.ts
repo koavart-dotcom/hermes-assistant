@@ -150,6 +150,11 @@ export async function showUi(target: string): Promise<void> {
   try {
     if (target === "hud") await api.hudWindowOpen();
     if (target === "hud_off") await api.hudWindowClose();
+    if (target === "quiet_on" || target === "quiet_off") {
+      v.setQuiet(target === "quiet_on");
+      v.setAnswer(target === "quiet_on" ? "Тихий режим: не говорю и реагирую только на «слушай»." : "Снова слушаю.");
+      return;
+    }
     if (target === "ticket_send") {
       const { sendDraftReply } = await import("@/lib/ticketReply");
       const msg = await sendDraftReply();
@@ -183,7 +188,7 @@ export async function showUi(target: string): Promise<void> {
 export async function speakAnswer(content: string): Promise<void> {
   const v = useVoiceStore.getState();
   v.setAnswer(content);
-  if (!v.speak || v.prefs.silent || !content.trim()) {
+  if (!v.speak || v.prefs.silent || v.quiet || !content.trim()) {
     v.setPhase(idlePhase());
     return;
   }
@@ -288,6 +293,13 @@ export async function startWakeListening(): Promise<void> {
         .then(async (text) => {
           const prefs = useVoiceStore.getState().prefs;
           const cmd = stripWakeWord(text, prefs.wake_words);
+          if (useVoiceStore.getState().quiet) {
+            // Quiet mode: only the phrase that ends it is honoured.
+            const q = await api.quickMatch(cmd ?? text);
+            if (q?.id === "voice.quiet_off") await handleUtterance(cmd ?? text);
+            else useVoiceStore.getState().setPhase("listening");
+            return;
+          }
           if (cmd === null) {
             // Without the wake word only quick commands may run (if allowed in settings).
             if (!prefs.wake_required && text.trim()) {

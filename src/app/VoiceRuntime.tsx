@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { emitVoiceState, isTauri, onChatEvent, onHudPtt } from "@/services/tauri";
+import { emitVoiceState, isTauri, onChatEvent, onHotkey, onHudPtt } from "@/services/tauri";
 import { applyMode, loadPrefs, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
 import { dueTime, fireKey, readFired, writeFired } from "@/lib/digest";
 import { runDigest } from "@/lib/digestRun";
@@ -83,6 +83,18 @@ export function VoiceRuntime() {
     // always-listening stream stopped, so a watchdog ends the press after 20 s.
     let watchdog: ReturnType<typeof setTimeout> | null = null;
     let unlisten: (() => void) | undefined;
+    let unlistenKey: (() => void) | undefined;
+    // Global key behaves like the HUD button: hold to talk, works from any app.
+    onHotkey((down) => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = null;
+      if (down) {
+        void pttStart();
+        watchdog = setTimeout(() => void pttStop(), 20_000);
+      } else {
+        void pttStop();
+      }
+    }).then((u) => (unlistenKey = u));
     onHudPtt((down) => {
       if (watchdog) clearTimeout(watchdog);
       watchdog = null;
@@ -98,6 +110,7 @@ export function VoiceRuntime() {
       if (timer) clearTimeout(timer);
       if (watchdog) clearTimeout(watchdog);
       unlisten?.();
+      unlistenKey?.();
     };
   }, []);
 

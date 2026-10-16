@@ -474,8 +474,20 @@ pub fn prefs_get(state: State<'_, AppState>) -> Prefs {
 }
 
 #[tauri::command]
-pub fn prefs_set(state: State<'_, AppState>, prefs: Prefs) -> Result<Prefs, String> {
-    state.supervisor.prefs_set(&prefs).map_err(err)
+pub fn prefs_set(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    prefs: Prefs,
+) -> Result<Prefs, String> {
+    let saved = state.supervisor.prefs_set(&prefs).map_err(err)?;
+    crate::apply_hotkey(&app, &saved.hotkey)?;
+    Ok(saved)
+}
+
+/// Re-register the global push-to-talk key (also used to test a combination).
+#[tauri::command]
+pub fn hotkey_apply(app: AppHandle, shortcut: String) -> Result<(), String> {
+    crate::apply_hotkey(&app, &shortcut)
 }
 
 #[tauri::command]

@@ -9,6 +9,7 @@ export const DEFAULT_PREFS: Prefs = {
   voice_pack: "Jarvis",
   digest: { enabled: false, times: ["09:00", "14:00", "17:00"], speak: true, telegram: true },
   claude_project: "hermes-assistant",
+  hotkey: "CommandOrControl+Shift+Space",
 };
 
 /** How the assistant takes input: text only, push-to-talk, or always listening for a wake word. */
@@ -28,6 +29,9 @@ interface VoiceState {
   /** Shell preferences (volume, silent, wake words); loaded from the backend. */
   prefs: Prefs;
   setPrefs: (p: Prefs) => void;
+  /** «Тихо»: no reactions, no spoken answers, voice reacts only to «слушай». Not persisted. */
+  quiet: boolean;
+  setQuiet: (v: boolean) => void;
   setMode: (mode: VoiceMode) => void;
   setPhase: (phase: VoicePhase) => void;
   setLevel: (level: number) => void;
@@ -62,6 +66,8 @@ export const useVoiceStore = create<VoiceState>((set) => ({
   waitingSession: null,
   prefs: DEFAULT_PREFS,
   setPrefs: (prefs) => set({ prefs }),
+  quiet: false,
+  setQuiet: (quiet) => set({ quiet }),
   setMode: (mode) => {
     try {
       localStorage.setItem(MODE_KEY, mode);

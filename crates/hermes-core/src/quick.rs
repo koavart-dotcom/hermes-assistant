@@ -462,7 +462,7 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "ui" => {
             if !matches!(
                 arg,
-                "tickets" | "hud" | "hud_off" | "digest" | "ticket_send"
+                "tickets" | "hud" | "hud_off" | "digest" | "ticket_send" | "quiet_on" | "quiet_off"
             ) {
                 return Err(format!("unknown ui target `{arg}`"));
             }

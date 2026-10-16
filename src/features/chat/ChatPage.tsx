@@ -9,6 +9,7 @@ import { ticketsMarkdown } from "@/features/tickets/ticketsText";
 import { api, isTauri, type ApprovalChoice } from "@/services/tauri";
 import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
+import { useVoiceStore } from "@/stores/voice";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
 import type { QuickRunResult } from "@/types/generated/QuickRunResult";
@@ -35,6 +36,10 @@ async function afterQuick(sessionId: string, r: QuickRunResult): Promise<void> {
   const { addAssistantTurn } = useChatStore.getState();
   addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
   if (!r.ok) return;
+  if (r.ui === "quiet_on" || r.ui === "quiet_off") {
+    useVoiceStore.getState().setQuiet(r.ui === "quiet_on");
+    addAssistantTurn(sessionId, r.ui === "quiet_on" ? "Тихий режим включён." : "Тихий режим выключен.");
+  }
   if (r.ui === "ticket_send") {
     const { sendDraftReply } = await import("@/lib/ticketReply");
     addAssistantTurn(sessionId, await sendDraftReply());

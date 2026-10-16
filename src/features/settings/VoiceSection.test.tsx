@@ -13,7 +13,16 @@ vi.mock("@/services/tauri", () => ({ api, isTauri: () => true }));
 import { VoiceSection } from "@/features/settings/VoiceSection";
 import { useVoiceStore } from "@/stores/voice";
 
-const prefs = { voice_volume: 0.8, silent: false, wake_words: ["джарвис", "гермес"], wake_required: true, voice_pack: "Jarvis" };
+const prefs = {
+  voice_volume: 0.8,
+  silent: false,
+  wake_words: ["джарвис", "гермес"],
+  wake_required: true,
+  voice_pack: "Jarvis",
+  digest: { enabled: false, times: ["09:00"], speak: true, telegram: true },
+  claude_project: "hermes-assistant",
+  hotkey: "F9",
+};
 
 describe("VoiceSection", () => {
   beforeEach(() => {

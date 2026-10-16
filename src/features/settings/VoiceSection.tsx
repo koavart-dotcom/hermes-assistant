@@ -93,6 +93,11 @@ export function VoiceSection() {
             <span>Тихий режим: без реакций и озвучки ответов</span>
           </label>
           <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Горячая клавиша «нажми и говори» (из любого окна; пусто — выключена)</span>
+            <Input value={d.hotkey} onChange={(e) => setDraft({ ...d, hotkey: e.target.value })} aria-label="Горячая клавиша" placeholder="CommandOrControl+Shift+Space" className="font-mono" />
+            <span className="text-xs text-muted-foreground">Примеры: Ctrl+Alt+J, CommandOrControl+Shift+Space, F9. Удерживайте, говорите, отпустите.</span>
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Слова-обращения, через запятую</span>
             <Input value={wakeText} onChange={(e) => setWakeText(e.target.value)} aria-label="Слова-обращения" placeholder="джарвис, гермес" />
           </label>

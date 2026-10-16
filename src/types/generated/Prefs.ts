@@ -30,4 +30,8 @@ digest: Digest,
 /**
  * Project name (from the bridge's projects.json) for «попроси Клода …».
  */
-claude_project: string, };
+claude_project: string, 
+/**
+ * Global push-to-talk shortcut (Tauri syntax, e.g. `CommandOrControl+Shift+Space`); empty = off.
+ */
+hotkey: string, };
