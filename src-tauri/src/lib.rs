@@ -176,6 +176,8 @@ pub fn run() {
             commands::tickets_fetch,
             commands::tickets_window_open,
             commands::open_url,
+            commands::ticket_reply,
+            commands::ticket_pending,
             commands::hud_window_open,
             commands::hud_window_close,
             commands::digest_run,

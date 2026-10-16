@@ -11,6 +11,7 @@ import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
+import type { QuickRunResult } from "@/types/generated/QuickRunResult";
 
 const EMPTY_TURNS: Turn[] = [];
 
@@ -29,6 +30,30 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** What the chat does with a finished quick command: result row, UI targets, spoken text, model handoff. */
+async function afterQuick(sessionId: string, r: QuickRunResult): Promise<void> {
+  const { addAssistantTurn } = useChatStore.getState();
+  addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
+  if (!r.ok) return;
+  if (r.ui === "ticket_send") {
+    const { sendDraftReply } = await import("@/lib/ticketReply");
+    addAssistantTurn(sessionId, await sendDraftReply());
+  }
+  if (r.ui === "digest") {
+    const { runDigest } = await import("@/lib/digestRun");
+    await runDigest(true);
+  }
+  if (r.ui === "hud") await api.hudWindowOpen();
+  if (r.ui === "hud_off") await api.hudWindowClose();
+  if (r.ui === "tickets") {
+    await api.ticketsWindowOpen();
+    const snap = await api.ticketsFetch();
+    addAssistantTurn(sessionId, ticketsMarkdown(snap));
+  }
+  if (r.spoken) addAssistantTurn(sessionId, r.spoken);
+  if (r.handoff) await api.chatSend(sessionId, r.handoff);
+}
+
 export function ChatPage() {
   const sessions = useChatStore((s) => s.sessions);
   const activeId = useChatStore((s) => s.activeId);
@@ -36,7 +61,7 @@ export function ChatPage() {
   const runId = useChatStore((s) => (s.activeId ? (s.runs[s.activeId] ?? null) : null));
   const approval = useChatStore((s) => (s.activeId ? (s.approvals[s.activeId] ?? null) : null));
   const error = useChatStore((s) => s.error);
-  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, addAssistantTurn, clearApproval, setError } =
+  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, clearApproval, setError } =
     useChatStore.getState();
   const [pendingQuick, setPendingQuick] = useState<{ sessionId: string; match: QuickMatch } | null>(null);
 
@@ -108,21 +133,7 @@ export function ChatPage() {
           setPendingQuick({ sessionId, match: quick });
           return;
         }
-        const r = await api.quickRun(quick.id, false, quick.query);
-        addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
-        if (r.ui === "digest") {
-          const { runDigest } = await import("@/lib/digestRun");
-          await runDigest(true);
-        }
-        if (r.ui === "hud") await api.hudWindowOpen();
-        if (r.ui === "hud_off") await api.hudWindowClose();
-        if (r.ui === "tickets") {
-          await api.ticketsWindowOpen();
-          const snap = await api.ticketsFetch();
-          addAssistantTurn(sessionId, ticketsMarkdown(snap));
-        }
-        if (r.ok && r.spoken) addAssistantTurn(sessionId, r.spoken);
-        if (r.ok && r.handoff) await api.chatSend(sessionId, r.handoff);
+        await afterQuick(sessionId, await api.quickRun(quick.id, false, quick.query));
         return;
       }
       await api.chatSend(sessionId, text);
@@ -131,7 +142,7 @@ export function ChatPage() {
     } finally {
       setBusy(false);
     }
-  }, [draft, busy, activeId, upsertSession, setActive, addUserTurn, addAssistantTurn, setError]);
+  }, [draft, busy, activeId, upsertSession, setActive, addUserTurn, setError]);
 
   const stop = useCallback(() => {
     if (activeId) api.chatStop(activeId).catch((e) => setError(errorText(e)));
@@ -255,7 +266,7 @@ export function ChatPage() {
                         setPendingQuick(null);
                         api
                           .quickRun(q.match.id, true, q.match.query)
-                          .then((r) => addAssistantTurn(q.sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined)))
+                          .then((r) => afterQuick(q.sessionId, r))
                           .catch((e) => setError(errorText(e)));
                       }}
                     >

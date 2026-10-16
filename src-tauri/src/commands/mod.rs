@@ -434,6 +434,25 @@ pub async fn hud_window_close(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Send the drafted reply (last assistant message) to the pending ticket.
+#[tauri::command]
+pub async fn ticket_reply(
+    state: State<'_, AppState>,
+    text: String,
+    number: Option<u64>,
+) -> Result<u64, String> {
+    state
+        .supervisor
+        .ticket_reply(number, &text)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn ticket_pending(state: State<'_, AppState>) -> Option<u64> {
+    state.supervisor.pending_draft()
+}
+
 #[tauri::command]
 pub async fn open_url(url: String) -> Result<(), String> {
     hermes_core::quick::open_url(&url).await.map_err(err)

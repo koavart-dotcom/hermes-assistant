@@ -31,6 +31,9 @@ pub struct QuickRunResult {
     pub handoff: Option<String>,
     /// Short text to say back without the model (e.g. the opened link's title).
     pub spoken: Option<String>,
+    /// Ticket number whose reply is being drafted (`ticket_draft`).
+    #[ts(type = "number | null")]
+    pub ticket: Option<u64>,
 }
 
 pub fn user_pack_path(layout: &crate::Layout) -> PathBuf {
@@ -107,6 +110,11 @@ impl Supervisor {
             .unwrap_or_else(|e| e.into_inner())
             .clone();
         let result = ex.run(&actions).await;
+        if let Ok(o) = &result {
+            if let Some(id) = o.ticket {
+                *self.pending_draft.lock().unwrap_or_else(|e| e.into_inner()) = Some(id);
+            }
+        }
         let (ok, error, outcome) = match result {
             Ok(o) => (true, None, o),
             Err(e) => (false, Some(e.to_string()), Default::default()),
@@ -131,6 +139,7 @@ impl Supervisor {
             }),
             handoff: outcome.handoff,
             spoken: outcome.spoken,
+            ticket: outcome.ticket,
         })
     }
 
@@ -196,5 +205,37 @@ impl Supervisor {
             )
         })?;
         crate::freescout::Client::new(cfg).snapshot().await
+    }
+}
+
+impl Supervisor {
+    /// Conversation id of the reply being drafted (after `ответь на тикет N`).
+    pub fn pending_draft(&self) -> Option<u64> {
+        *self.pending_draft.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Send `text` as the reply to the pending ticket (or an explicit number) and clear it.
+    pub async fn ticket_reply(&self, number: Option<u64>, text: &str) -> Result<u64> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(CoreError::Other("пустой ответ".into()));
+        }
+        let cfg = crate::freescout::config(&self.ctx.layout)?
+            .ok_or_else(|| CoreError::Other("FreeScout не настроен".into()))?;
+        let client = crate::freescout::Client::new(cfg);
+        let id = match number {
+            Some(n) => client.find_by_number(n).await?,
+            None => self.pending_draft().ok_or_else(|| {
+                CoreError::Other("нет черновика: сначала «ответь на тикет N»".into())
+            })?,
+        };
+        client.reply(id, text).await?;
+        *self.pending_draft.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.quick_log(
+            "ticket.reply",
+            "ok",
+            &format!("conversation {id}, {} chars", text.chars().count()),
+        );
+        Ok(id)
     }
 }

@@ -187,6 +187,10 @@ pub fn fill_action(action: &str, query: Option<&str>) -> String {
         return action.to_string();
     }
     let q = query.unwrap_or("");
+    if action.starts_with("ticket_draft:") || action.starts_with("ticket_open:") {
+        let digits: String = q.chars().filter(|c| c.is_ascii_digit()).collect();
+        return action.replace(QUERY, &digits);
+    }
     if let Some(rest) = action.strip_prefix("url:") {
         // `url:https://{query}` → keep a bare host usable; everything else is encoded.
         let value = if rest.trim_start().starts_with(QUERY)
@@ -374,6 +378,10 @@ pub enum Action {
     ReadPage,
     /// Type text into the active window (Unicode SendInput).
     TypeText(String),
+    /// Draft a reply for ticket N: the transcript goes to the model as a handoff.
+    TicketDraft(u64),
+    /// Open ticket N in the browser.
+    TicketOpen(u64),
 }
 
 pub const KEY_NAMES: &[&str] = &[
@@ -450,7 +458,10 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "shutdown" => Action::Shutdown,
         "stop_speech" => Action::StopSpeech,
         "ui" => {
-            if !matches!(arg, "tickets" | "hud" | "hud_off" | "digest") {
+            if !matches!(
+                arg,
+                "tickets" | "hud" | "hud_off" | "digest" | "ticket_send"
+            ) {
                 return Err(format!("unknown ui target `{arg}`"));
             }
             Action::Ui(arg.to_string())
@@ -465,8 +476,23 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "web_pick" => Action::WebPick(parse_index(arg)?),
         "read_page" => Action::ReadPage,
         "type" => Action::TypeText(arg.to_string()),
+        "ticket_draft" => Action::TicketDraft(parse_ticket(arg)?),
+        "ticket_open" => Action::TicketOpen(parse_ticket(arg)?),
         other => return Err(format!("unknown action `{other}`")),
     })
+}
+
+/// Ticket number from speech: digits only, "4210", "номер 4210", "4 2 1 0", "{query}" placeholder allowed.
+fn parse_ticket(arg: &str) -> std::result::Result<u64, String> {
+    if arg.contains(QUERY) {
+        return Ok(0); // filled in later from the spoken query
+    }
+    let digits: String = arg.chars().filter(|c| c.is_ascii_digit()).collect();
+    digits
+        .parse::<u64>()
+        .ok()
+        .filter(|n| *n > 0)
+        .ok_or_else(|| format!("bad ticket number `{arg}`"))
 }
 
 fn parse_index(arg: &str) -> std::result::Result<usize, String> {
@@ -564,6 +590,8 @@ pub struct Outcome {
     pub handoff: Option<String>,
     /// Something to say back (quick, no model).
     pub spoken: Option<String>,
+    /// Conversation id a drafted reply belongs to (set by `ticket_draft`).
+    pub ticket: Option<u64>,
 }
 
 impl Executor {
@@ -615,6 +643,29 @@ impl Executor {
                     ));
                 }
                 Action::TypeText(t) => platform::type_text(t).await?,
+                Action::TicketDraft(n) => {
+                    let cfg = crate::freescout::config(&self.layout)?.ok_or_else(|| {
+                        CoreError::Other(
+                            "FreeScout не настроен (Настройки → Интеграции и ключи)".into(),
+                        )
+                    })?;
+                    let conv = crate::freescout::Client::new(cfg)
+                        .conversation_text(*n)
+                        .await?;
+                    out.spoken = Some(format!(
+                        "Готовлю ответ на заявку {}: {}",
+                        conv.ticket.number, conv.ticket.subject
+                    ));
+                    out.handoff = Some(crate::freescout::draft_prompt(&conv));
+                    out.ticket = Some(conv.id);
+                }
+                Action::TicketOpen(n) => {
+                    let cfg = crate::freescout::config(&self.layout)?
+                        .ok_or_else(|| CoreError::Other("FreeScout не настроен".into()))?;
+                    let client = crate::freescout::Client::new(cfg.clone());
+                    let id = client.find_by_number(*n).await?;
+                    platform::open_url(&format!("{}/conversation/{id}", cfg.url)).await?;
+                }
                 Action::Say(clip) => {
                     if self.silent {
                         continue;
@@ -1104,6 +1155,10 @@ mod tests {
             "url:https://github.com"
         );
         assert_eq!(fill_action("app:{query}", Some("paint")), "app:paint");
+        assert_eq!(
+            fill_action("ticket_draft:{query}", Some("номер 4 2 1 0")),
+            "ticket_draft:4210"
+        );
         assert_eq!(fill_action("key:win+d", Some("x")), "key:win+d");
     }
 

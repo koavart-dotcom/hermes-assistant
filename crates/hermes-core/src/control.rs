@@ -97,6 +97,8 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/hermes/env/presets", get(env_keys_presets))
         .route("/gateway/restart", post(gateway_restart))
         .route("/freescout/tickets", get(freescout_tickets))
+        .route("/freescout/reply", post(freescout_reply))
+        .route("/freescout/draft", get(freescout_draft))
         .route("/prefs", get(prefs_get).put(prefs_put))
         .route("/digest/run", post(digest_run))
         .route("/models/options", get(models_options))
@@ -413,6 +415,25 @@ async fn voice_packs_import(
 ) -> ApiResult<Json<Value>> {
     let n = ctl.sup.voice_pack_import(&req.name)?;
     Ok(Json(json!({ "ok": true, "name": req.name, "clips": n })))
+}
+
+#[derive(Deserialize)]
+struct ReplyRequest {
+    text: String,
+    #[serde(default)]
+    number: Option<u64>,
+}
+
+async fn freescout_reply(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<ReplyRequest>,
+) -> ApiResult<Json<Value>> {
+    let id = ctl.sup.ticket_reply(req.number, &req.text).await?;
+    Ok(Json(json!({ "ok": true, "conversation_id": id })))
+}
+
+async fn freescout_draft(State(ctl): State<Arc<Ctl>>) -> Json<Value> {
+    Json(json!({ "pending_conversation_id": ctl.sup.pending_draft() }))
 }
 
 // ------------------------------------------------------- API keys (.env) --

@@ -94,6 +94,14 @@ telegram_error}` — текст для чата/Telegram и фраза для о
 Расписание (`prefs.digest`: enabled, times `HH:MM`, speak, telegram) исполняет главное окно приложения по местному
 времени. `hermesctl digest [true]`.
 
+**Ответ на тикет (с v0.17.0):** команда «ответь на тикет N» (`ticket_draft:N`) скачивает переписку заявки
+(`GET /api/conversations/{id}?embed=threads`, хронологически, без HTML) и передаёт её модели как `handoff` с
+инструкцией написать черновик от имени Артема; id заявки запоминается как ожидающий. «Отправляй» (`ui:ticket_send`,
+с подтверждением) берёт последний ответ помощника из активного диалога и шлёт `POST /api/conversations/{id}/threads`
+`{type: message, user: FREESCOUT_MY_USER_ID}`. Control API: `GET /freescout/draft` → `{pending_conversation_id}`,
+`POST /freescout/reply {text, number?}`; `hermesctl ticket-draft`, `ticket-reply N текст`. «Открой тикет N»
+(`ticket_open:N`) открывает заявку в браузере.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

@@ -49,6 +49,8 @@ pub struct Supervisor {
     pub(crate) voice_setup: Mutex<Option<CancellationToken>>,
     /// Last search query of a `web.*` quick command (see supervisor_quick.rs).
     pub(crate) last_query: Mutex<Option<String>>,
+    /// Conversation id for which a reply draft was requested (see supervisor_quick.rs).
+    pub(crate) pending_draft: Mutex<Option<u64>>,
 }
 
 impl Supervisor {
@@ -69,6 +71,7 @@ impl Supervisor {
             dashboard_child: Mutex::new(None),
             voice_setup: Mutex::new(None),
             last_query: Mutex::new(None),
+            pending_draft: Mutex::new(None),
         })
     }
 

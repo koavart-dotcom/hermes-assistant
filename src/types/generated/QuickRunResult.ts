@@ -15,4 +15,8 @@ handoff: string | null,
 /**
  * Short text to say back without the model (e.g. the opened link's title).
  */
-spoken: string | null, };
+spoken: string | null, 
+/**
+ * Ticket number whose reply is being drafted (`ticket_draft`).
+ */
+ticket: number | null, };

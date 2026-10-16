@@ -150,6 +150,15 @@ export async function showUi(target: string): Promise<void> {
   try {
     if (target === "hud") await api.hudWindowOpen();
     if (target === "hud_off") await api.hudWindowClose();
+    if (target === "ticket_send") {
+      const { sendDraftReply } = await import("@/lib/ticketReply");
+      const msg = await sendDraftReply();
+      v.setAnswer(msg);
+      const chat = useChatStore.getState();
+      if (chat.activeId) chat.addAssistantTurn(chat.activeId, msg);
+      await speakAnswer(msg);
+      return;
+    }
     if (target === "digest") {
       const { runDigest } = await import("@/lib/digestRun");
       await runDigest(true);

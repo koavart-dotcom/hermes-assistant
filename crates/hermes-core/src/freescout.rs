@@ -90,6 +90,16 @@ pub struct TicketsSnapshot {
     pub summary: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
+#[ts(export, export_to = "../../src/types/generated/")]
+pub struct Conversation {
+    #[ts(type = "number")]
+    pub id: u64,
+    pub ticket: Ticket,
+    /// Chronological messages as `[date] Кто:\ntext` blocks.
+    pub transcript: String,
+}
+
 pub struct Client {
     cfg: Config,
     http: reqwest::Client,
@@ -166,6 +176,137 @@ impl Client {
             .into_iter()
             .filter(|c| c["state"].as_str().unwrap_or("published") == "published")
             .collect())
+    }
+
+    async fn post(&self, path: &str, body: &Value) -> Result<Value> {
+        let url = format!("{}/api/{path}", self.cfg.url);
+        let resp = self
+            .http
+            .post(&url)
+            .header("X-FreeScout-API-Key", &self.cfg.api_key)
+            .header("Accept", "application/json")
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| CoreError::Other(format!("FreeScout {path}: {e}")))?;
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(CoreError::Other(format!(
+                "FreeScout {path}: HTTP {status} {}",
+                text.chars().take(200).collect::<String>()
+            )));
+        }
+        Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
+    }
+
+    /// Conversation id for a ticket number (FreeScout numbers usually equal
+    /// ids, but not always): try the `number` filter, then the id itself.
+    pub async fn find_by_number(&self, number: u64) -> Result<u64> {
+        let v = self
+            .get(
+                "conversations",
+                &[
+                    ("number", number.to_string()),
+                    ("pageSize", "5".to_string()),
+                ],
+            )
+            .await?;
+        if let Some(c) = v["_embedded"]["conversations"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|c| c["number"].as_u64() == Some(number))
+        {
+            if let Some(id) = c["id"].as_u64() {
+                return Ok(id);
+            }
+        }
+        let c = self.get(&format!("conversations/{number}"), &[]).await?;
+        c["id"]
+            .as_u64()
+            .ok_or_else(|| CoreError::Other(format!("заявка #{number} не найдена")))
+    }
+
+    /// Conversation with its threads, as readable text for the model.
+    pub async fn conversation_text(&self, number: u64) -> Result<Conversation> {
+        let id = self.find_by_number(number).await?;
+        let c = self
+            .get(
+                &format!("conversations/{id}"),
+                &[("embed", "threads".to_string())],
+            )
+            .await?;
+        let boxes = self.mailboxes().await;
+        let today = iso_date(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0),
+        );
+        let ticket = compact(&c, &self.cfg.url, &boxes, &today);
+        let mut threads: Vec<Value> = c["_embedded"]["threads"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        // API returns newest first; the model wants chronological order.
+        threads.sort_by(|a, b| {
+            a["createdAt"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["createdAt"].as_str().unwrap_or(""))
+        });
+        let mut lines = Vec::new();
+        for t in threads.iter().filter(|t| {
+            matches!(
+                t["type"].as_str(),
+                Some("customer") | Some("message") | Some("note")
+            )
+        }) {
+            let who = match t["type"].as_str() {
+                Some("customer") => format!("Клиент ({})", name_of(&t["customer"])),
+                Some("note") => format!("Заметка ({})", name_of(&t["createdBy"])),
+                _ => format!("Поддержка ({})", name_of(&t["createdBy"])),
+            };
+            let body = strip_html(
+                t["body"].as_str().or(t["text"].as_str()).unwrap_or(""),
+                1500,
+            );
+            if body.is_empty() {
+                continue;
+            }
+            lines.push(format!(
+                "[{}] {who}:\n{body}",
+                t["createdAt"]
+                    .as_str()
+                    .unwrap_or("")
+                    .chars()
+                    .take(16)
+                    .collect::<String>()
+            ));
+        }
+        Ok(Conversation {
+            id,
+            ticket,
+            transcript: lines.join("\n\n"),
+        })
+    }
+
+    /// Post a reply to the customer as `my_user_id`.
+    pub async fn reply(&self, conversation_id: u64, text: &str) -> Result<()> {
+        let user = self
+            .cfg
+            .my_user_id
+            .ok_or_else(|| CoreError::Other("FREESCOUT_MY_USER_ID не задан".into()))?;
+        let body = serde_json::json!({
+            "type": "message",
+            "text": text.replace('\n', "<br>"),
+            "user": user,
+            "imported": false,
+        });
+        self.post(&format!("conversations/{conversation_id}/threads"), &body)
+            .await?;
+        Ok(())
     }
 
     pub async fn snapshot(&self) -> Result<TicketsSnapshot> {
@@ -267,6 +408,25 @@ pub fn compact(c: &Value, base_url: &str, boxes: &HashMap<u64, String>, today: &
         url: format!("{base_url}/conversation/{id}"),
         mark: mark.to_string(),
     }
+}
+
+/// Prompt for the model to draft a reply (the answer becomes the draft).
+pub fn draft_prompt(c: &Conversation) -> String {
+    format!(
+        "Ты помощник IT-поддержки компании Deka. Ниже переписка по заявке #{n} «{subj}» от клиента {cust} (ящик {mb}). \
+Напиши черновик ответа клиенту от имени Артема: на языке переписки (украинский или русский), вежливо и по делу, \
+3–8 предложений, без обращения «Уважаемый» и без подписи. Если для решения не хватает данных — задай клиенту \
+уточняющие вопросы. Выведи только текст ответа, без пояснений.\n\nПереписка:\n{tr}",
+        n = c.ticket.number,
+        subj = c.ticket.subject,
+        cust = if c.ticket.customer.is_empty() {
+            c.ticket.customer_email.clone()
+        } else {
+            c.ticket.customer.clone()
+        },
+        mb = c.ticket.mailbox,
+        tr = c.transcript
+    )
 }
 
 /// Spoken summary: counts only, short enough for a voice reaction.
@@ -457,6 +617,22 @@ mod tests {
         assert_eq!(t.tags, vec!["printer"]);
         let t2 = compact(&c, "https://h.example", &boxes, "2026-10-17");
         assert_eq!(t2.mark, "working");
+    }
+
+    #[test]
+    fn draft_prompt_mentions_ticket() {
+        let boxes = HashMap::new();
+        let c = json!({"id": 9, "number": 4210, "subject": "Нет интернета", "state": "published",
+            "customer": {"firstName": "Олег", "email": "o@x.ua"}, "createdAt": "", "updatedAt": "", "_embedded": {}});
+        let conv = Conversation {
+            id: 9,
+            ticket: compact(&c, "https://h", &boxes, "2026-10-16"),
+            transcript: "[2026-10-16T08:00] Клиент (Олег):\nНе работает интернет".into(),
+        };
+        let p = draft_prompt(&conv);
+        assert!(p.contains("#4210 «Нет интернета»"));
+        assert!(p.contains("клиента Олег"));
+        assert!(p.ends_with("Не работает интернет"));
     }
 
     #[test]

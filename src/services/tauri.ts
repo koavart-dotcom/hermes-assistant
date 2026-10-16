@@ -77,6 +77,8 @@ export const api = {
   ticketsFetch: () => invoke<TicketsSnapshot>("tickets_fetch"),
   ticketsWindowOpen: () => invoke<void>("tickets_window_open"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  ticketReply: (text: string, number?: number | null) => invoke<number>("ticket_reply", { text, number: number ?? null }),
+  ticketPending: () => invoke<number | null>("ticket_pending"),
   hudWindowOpen: () => invoke<void>("hud_window_open"),
   hudWindowClose: () => invoke<void>("hud_window_close"),
 
