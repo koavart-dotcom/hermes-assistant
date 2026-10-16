@@ -27,7 +27,20 @@ export function ApprovalsPage() {
   });
 
   const pending = Object.entries(approvals).filter(([, a]) => a);
-  const decide = (runId: string, choice: ApprovalChoice) => api.chatApprove(runId, choice).catch(() => {});
+  const clearApproval = useChatStore((s) => s.clearApproval);
+  const setError = useChatStore((s) => s.setError);
+  const error = useChatStore((s) => s.error);
+  const decide = (sessionId: string, runId: string, choice: ApprovalChoice) =>
+    api.chatApprove(runId, choice).catch((e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Run already finished or answered elsewhere: the card is stale.
+      clearApproval(sessionId);
+      setError(
+        msg.includes("approval_not_pending") || msg.includes("409")
+          ? "Этот запрос уже закрыт, подтверждение больше не требуется."
+          : msg,
+      );
+    });
 
   if (!isTauri()) {
     return <PageShell title="Подтверждения" description="Доступно только внутри приложения." />;
@@ -40,6 +53,11 @@ export function ApprovalsPage() {
     >
       <section className="mb-6">
         <h2 className="mb-2 text-sm font-semibold">Ожидают решения</h2>
+        {error ? (
+          <p className="mb-2 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
         {pending.length === 0 ? (
           <p className="text-sm text-muted-foreground">Сейчас ничего не ждёт подтверждения.</p>
         ) : (
@@ -54,7 +72,7 @@ export function ApprovalsPage() {
                       key={c}
                       size="sm"
                       variant={c === "deny" ? "destructive" : c === "once" ? "default" : "outline"}
-                      onClick={() => decide(a!.runId, c as ApprovalChoice)}
+                      onClick={() => decide(sessionId, a!.runId, c as ApprovalChoice)}
                     >
                       {c === "once" ? "Разрешить" : c === "session" ? "На сессию" : c === "always" ? "Всегда" : "Запретить"}
                     </Button>

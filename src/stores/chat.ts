@@ -43,6 +43,7 @@ interface ChatState {
   setHistory: (sessionId: string, messages: ChatMessage[]) => void;
   addUserTurn: (sessionId: string, text: string) => void;
   apply: (sessionId: string, event: ChatEvent) => void;
+  clearApproval: (sessionId: string) => void;
   setError: (error: string | null) => void;
 }
 
@@ -88,6 +89,7 @@ export const useChatStore = create<ChatState>((set) => ({
       error: null,
     })),
   setError: (error) => set({ error }),
+  clearApproval: (sessionId) => set((s) => ({ approvals: { ...s.approvals, [sessionId]: null } })),
 
   apply: (sessionId, event) =>
     set((s) => {

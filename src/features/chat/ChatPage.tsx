@@ -5,7 +5,7 @@ import { Loader2, Plus, Send, Square, Trash2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { api, isTauri, onChatEvent, type ApprovalChoice } from "@/services/tauri";
+import { api, isTauri, type ApprovalChoice } from "@/services/tauri";
 import { Markdown } from "@/features/chat/Markdown";
 import { useChatStore, type PendingApproval, type Turn } from "@/stores/chat";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
@@ -34,7 +34,7 @@ export function ChatPage() {
   const runId = useChatStore((s) => (s.activeId ? (s.runs[s.activeId] ?? null) : null));
   const approval = useChatStore((s) => (s.activeId ? (s.approvals[s.activeId] ?? null) : null));
   const error = useChatStore((s) => s.error);
-  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, apply, setError } =
+  const { setSessions, upsertSession, removeSession, setActive, setHistory, addUserTurn, clearApproval, setError } =
     useChatStore.getState();
 
   const info = useQuery({ queryKey: ["app_info"], queryFn: api.appInfo, enabled: isTauri(), refetchInterval: 10_000 });
@@ -44,14 +44,6 @@ export function ChatPage() {
   const [busy, setBusy] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Live events from the Rust side.
-  useEffect(() => {
-    if (!isTauri()) return;
-    let unlisten: (() => void) | undefined;
-    onChatEvent((env) => apply(env.session_id, env.event)).then((u) => (unlisten = u));
-    return () => unlisten?.();
-  }, [apply]);
 
   // Session list once the gateway is up.
   useEffect(() => {
@@ -120,9 +112,18 @@ export function ChatPage() {
 
   const decide = useCallback(
     (a: PendingApproval, choice: ApprovalChoice) => {
-      api.chatApprove(a.runId, choice).catch((e) => setError(errorText(e)));
+      api.chatApprove(a.runId, choice).catch((e) => {
+        const msg = errorText(e);
+        if (msg.includes("approval_not_pending") || msg.includes("409")) {
+          // The run already finished (or Hermes answered it elsewhere): drop the stale card.
+          if (activeId) clearApproval(activeId);
+          setError("Этот запрос уже закрыт, подтверждение больше не требуется.");
+        } else {
+          setError(msg);
+        }
+      });
     },
-    [setError],
+    [activeId, clearApproval, setError],
   );
 
   const remove = useCallback(

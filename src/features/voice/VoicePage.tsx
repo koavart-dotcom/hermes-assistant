@@ -40,7 +40,7 @@ export function VoicePage() {
   const recorder = useRef<Recorder | null>(null);
   const waitingSession = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { addUserTurn, upsertSession, setActive, apply } = useChatStore.getState();
+  const { addUserTurn, upsertSession, setActive } = useChatStore.getState();
 
   // Setup progress (shared setup event stream) while voice deps install.
   useEffect(() => {
@@ -66,7 +66,6 @@ export function VoicePage() {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     onChatEvent((env) => {
-      apply(env.session_id, env.event);
       if (env.session_id !== waitingSession.current) return;
       if (env.event.kind === "completed") {
         setAnswer(env.event.content);
@@ -99,7 +98,7 @@ export function VoicePage() {
       }
     }).then((u) => (unlisten = u));
     return () => unlisten?.();
-  }, [apply, speak]);
+  }, [speak]);
 
   const begin = useCallback(async () => {
     if (phase !== "idle" || !status.data?.server_running) return;
