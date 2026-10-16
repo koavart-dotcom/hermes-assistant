@@ -68,6 +68,11 @@ default}}`); плагин читает файл при каждом вызове
 `.env` gateway читает при старте, поэтому после изменений нужен `POST /gateway/restart` (стоп + старт).
 Сами значения ключей в логах и ответах API не появляются.
 
+**Быстрые команды, дополнение (v0.12–0.13):** `POST /quick/run` принимает `{id, confirmed, query}` — `query` подставляется
+вместо `{query}` в действия параметрической команды (`hermesctl quick-run web.google курс доллара`); ответ
+`QuickRunResult` получил `ui` (окно, которое должна открыть оболочка), `handoff` (текст для модели, например страница
+для пересказа) и `spoken` (короткий ответ без модели). `/quick/match` возвращает `query` в `QuickMatch`.
+
 **Хелпдеск (с v0.10.0, этап 7):** `GET /freescout/tickets` — `TicketsSnapshot` `{fetched_at, my_user_id, mine: [Ticket],
 unassigned: [Ticket], summary}` из FreeScout по ключам `FREESCOUT_URL`/`FREESCOUT_API_KEY`/`FREESCOUT_MY_USER_ID` в `.env`
 Hermes (активные + ожидающие, корзина отброшена, `mark: new|updated|working` по сегодняшнему дню UTC); `summary` —
