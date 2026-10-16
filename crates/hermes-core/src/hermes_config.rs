@@ -6,18 +6,19 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cli::run_hermes;
 use crate::events::{EventSender, SetupEvent, emit};
-use crate::ollama::OLLAMA_HOST;
 use crate::{Layout, Result};
 
 pub const API_SERVER_PORT: u16 = 8642;
 
 /// The settings our shell owns. Keys follow the Hermes config schema
 /// (docs: configuration, local-ollama-setup, api-server, security).
-pub fn settings(model: &str, api_key: &str) -> Vec<(String, String)> {
+/// `ollama_base_url` is `Ollama::base_url()` — the port may differ from
+/// 11434 when another program holds it.
+pub fn settings(model: &str, api_key: &str, ollama_base_url: &str) -> Vec<(String, String)> {
     vec![
         ("model.default".into(), model.into()),
         ("model.provider".into(), "custom".into()),
-        ("model.base_url".into(), format!("http://{OLLAMA_HOST}/v1")),
+        ("model.base_url".into(), format!("{ollama_base_url}/v1")),
         ("approvals.mode".into(), "manual".into()),
         ("stt.language".into(), "ru".into()),
         ("API_SERVER_ENABLED".into(), "true".into()),
@@ -31,10 +32,11 @@ pub async fn apply(
     layout: &Layout,
     model: &str,
     api_key: &str,
+    ollama_base_url: &str,
     events: &EventSender,
     cancel: &CancellationToken,
 ) -> Result<()> {
-    for (key, value) in settings(model, api_key) {
+    for (key, value) in settings(model, api_key, ollama_base_url) {
         let shown = if key.contains("KEY") {
             "***".to_string()
         } else {
@@ -57,11 +59,11 @@ mod tests {
 
     #[test]
     fn settings_cover_model_api_and_approvals() {
-        let s = settings("qwen3.5", "abc");
+        let s = settings("qwen3.5", "abc", "http://127.0.0.1:11435");
         let get = |k: &str| s.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
         assert_eq!(get("model.default"), Some("qwen3.5"));
         assert_eq!(get("model.provider"), Some("custom"));
-        assert_eq!(get("model.base_url"), Some("http://127.0.0.1:11434/v1"));
+        assert_eq!(get("model.base_url"), Some("http://127.0.0.1:11435/v1"));
         assert_eq!(get("approvals.mode"), Some("manual"));
         assert_eq!(get("API_SERVER_KEY"), Some("abc"));
         assert_eq!(get("API_SERVER_ENABLED"), Some("true"));

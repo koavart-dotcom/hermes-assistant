@@ -18,7 +18,12 @@ use crate::{CoreError, Layout, Result};
 pub const OLLAMA_VERSION: &str = "v0.40.5";
 /// CLI + NVIDIA libraries, no installer (Ollama docs: "Standalone CLI").
 pub const OLLAMA_ZIP_BYTES: u64 = 1_471_226_485;
-pub const OLLAMA_HOST: &str = "127.0.0.1:11434";
+/// Ollama's conventional port. Other software may squat on it (on the main
+/// PC VS Code listens on 11434 and never answers), so the port actually used
+/// is chosen by [`Ollama::ensure_port`] and remembered in `ollama-port`.
+pub const DEFAULT_PORT: u16 = 11434;
+/// How many ports above [`DEFAULT_PORT`] to try.
+pub const PORT_TRIES: u16 = 10;
 
 pub fn zip_url() -> String {
     format!(
@@ -30,6 +35,14 @@ pub fn zip_url() -> String {
 pub struct Ollama {
     pub layout: Layout,
     client: reqwest::Client,
+    /// `127.0.0.1:<port>` — the port chosen by `ensure_port` (or the default).
+    host: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct VersionResponse {
+    #[serde(default)]
+    version: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,30 +68,130 @@ struct PullLine {
     error: Option<String>,
 }
 
+/// `<app_data_dir>/ollama-port` — the port chosen by `ensure_port`.
+pub fn port_file(layout: &Layout) -> PathBuf {
+    layout.app_data_dir.join("ollama-port")
+}
+
+#[cfg(test)]
+mod port_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn skips_a_port_that_accepts_connections() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let taken = listener.local_addr().unwrap().port();
+        let free = first_free_port(taken, 5).await.unwrap();
+        assert_ne!(free, taken);
+        assert!(free > taken && free < taken + 5);
+    }
+
+    #[tokio::test]
+    async fn new_reads_remembered_port() {
+        let root = std::env::temp_dir().join(format!("hermes-port-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let layout = Layout::from_roots(&root, &root.join("data"));
+        assert_eq!(Ollama::new(layout.clone()).host(), "127.0.0.1:11434");
+        std::fs::create_dir_all(&layout.app_data_dir).unwrap();
+        std::fs::write(port_file(&layout), "11436\n").unwrap();
+        let o = Ollama::new(layout);
+        assert_eq!(o.host(), "127.0.0.1:11436");
+        assert_eq!(o.base_url(), "http://127.0.0.1:11436");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// First port in `start..start+tries` with nothing listening on loopback.
+pub async fn first_free_port(start: u16, tries: u16) -> Option<u16> {
+    for port in start..start.saturating_add(tries) {
+        let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+        let connect = tokio::net::TcpStream::connect(addr);
+        match tokio::time::timeout(std::time::Duration::from_millis(700), connect).await {
+            Ok(Ok(_)) => continue,                    // something accepted: taken
+            Ok(Err(_)) | Err(_) => return Some(port), // refused or silent: free
+        }
+    }
+    None
+}
+
 impl Ollama {
     pub fn new(layout: Layout) -> Ollama {
+        let port = std::fs::read_to_string(port_file(&layout))
+            .ok()
+            .and_then(|s| s.trim().parse::<u16>().ok())
+            .unwrap_or(DEFAULT_PORT);
         Ollama {
             layout,
             client: reqwest::Client::new(),
+            host: format!("127.0.0.1:{port}"),
         }
     }
 
+    /// `127.0.0.1:<port>`.
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
     pub fn base_url(&self) -> String {
-        format!("http://{OLLAMA_HOST}")
+        format!("http://{}", self.host)
     }
 
     pub fn is_installed(&self) -> bool {
         self.layout.ollama_exe().exists()
     }
 
+    /// True only when a real Ollama answers `/api/version` on our port
+    /// (a foreign listener that accepts and never replies does not count).
     pub async fn is_running(&self) -> bool {
-        self.client
+        let Ok(resp) = self
+            .client
             .get(format!("{}/api/version", self.base_url()))
             .timeout(std::time::Duration::from_secs(3))
             .send()
             .await
-            .map(|r| r.status().is_success())
-            .unwrap_or(false)
+        else {
+            return false;
+        };
+        resp.status().is_success()
+            && resp
+                .json::<VersionResponse>()
+                .await
+                .map(|v| !v.version.is_empty())
+                .unwrap_or(false)
+    }
+
+    /// Make sure our port is usable: keep it when our Ollama already answers,
+    /// otherwise pick the first free port from the default upwards and
+    /// remember it for every later start and for the Hermes config.
+    pub async fn ensure_port(&mut self, events: &EventSender) -> Result<()> {
+        if self.is_running().await {
+            return Ok(());
+        }
+        let port = first_free_port(DEFAULT_PORT, PORT_TRIES)
+            .await
+            .ok_or_else(|| {
+                CoreError::Other(format!(
+                    "no free port for Ollama in {DEFAULT_PORT}..{}",
+                    DEFAULT_PORT + PORT_TRIES
+                ))
+            })?;
+        if port != DEFAULT_PORT {
+            emit(
+                events,
+                SetupEvent::Log {
+                    line: format!(
+                        "port {DEFAULT_PORT} is taken by another program (not Ollama); using {port}"
+                    ),
+                },
+            );
+        }
+        self.host = format!("127.0.0.1:{port}");
+        let file = port_file(&self.layout);
+        if let Some(p) = file.parent() {
+            tokio::fs::create_dir_all(p).await?;
+        }
+        tokio::fs::write(&file, port.to_string()).await?;
+        Ok(())
     }
 
     /// Download the release zip (if not already present) and extract it.
@@ -134,26 +247,59 @@ impl Ollama {
             return Ok(None);
         }
         tokio::fs::create_dir_all(&self.layout.models_dir).await?;
+        // `ollama serve` logs to stderr; keep it in a file so a failed start
+        // can be diagnosed (the first run on the PC died silently).
+        let log_path = self.log_file();
+        if let Some(p) = log_path.parent() {
+            tokio::fs::create_dir_all(p).await?;
+        }
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
+        let log_err = log.try_clone()?;
         let mut cmd = Command::new(self.layout.ollama_exe());
         cmd.arg("serve")
-            .env("OLLAMA_HOST", OLLAMA_HOST)
+            .env("OLLAMA_HOST", &self.host)
             .env("OLLAMA_MODELS", &self.layout.models_dir)
             .env("OLLAMA_KEEP_ALIVE", "24h")
+            .current_dir(&self.layout.ollama_dir)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(Stdio::from(log))
+            .stderr(Stdio::from(log_err))
             .kill_on_drop(false);
         hide_console(&mut cmd);
-        let child = cmd.spawn()?;
-        for _ in 0..40 {
+        let mut child = cmd.spawn()?;
+        // First start on Windows can take a while (Defender scans ~1 GB of
+        // CUDA libraries); poll for up to 90 s but fail fast if it exits.
+        for _ in 0..180 {
+            if let Some(status) = child.try_wait()? {
+                return Err(CoreError::Other(format!(
+                    "ollama serve exited with {status}; last log lines: {}",
+                    self.log_tail(8)
+                )));
+            }
             if self.is_running().await {
                 return Ok(Some(child));
             }
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
-        Err(CoreError::Other(
-            "ollama serve did not become ready in 20 s".into(),
-        ))
+        Err(CoreError::Other(format!(
+            "ollama serve did not become ready in 90 s; last log lines: {}",
+            self.log_tail(8)
+        )))
+    }
+
+    /// `<app_data_dir>/logs/ollama.log` — stdout+stderr of `ollama serve`.
+    pub fn log_file(&self) -> std::path::PathBuf {
+        self.layout.app_data_dir.join("logs").join("ollama.log")
+    }
+
+    fn log_tail(&self, n: usize) -> String {
+        let text = std::fs::read_to_string(self.log_file()).unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        let start = lines.len().saturating_sub(n);
+        lines[start..].join(" | ")
     }
 
     pub async fn models(&self) -> Result<Vec<String>> {

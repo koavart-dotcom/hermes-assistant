@@ -171,7 +171,18 @@ async fn run_inner(
         },
     );
     let api_key = secrets::api_server_key(&ctx.layout)?;
-    hermes_config::apply(&ctx.layout, &opts.model, &api_key, events, cancel).await?;
+    // The Ollama port goes into config.yaml, so choose it before configuring.
+    let mut ollama = Ollama::new(ctx.layout.clone());
+    ollama.ensure_port(events).await?;
+    hermes_config::apply(
+        &ctx.layout,
+        &opts.model,
+        &api_key,
+        &ollama.base_url(),
+        events,
+        cancel,
+    )
+    .await?;
     emit(
         events,
         SetupEvent::StepFinished {
@@ -186,7 +197,6 @@ async fn run_inner(
             step: SetupStep::Ollama,
         },
     );
-    let ollama = Ollama::new(ctx.layout.clone());
     ollama.ensure_installed(events, cancel).await?;
     let child = ollama.start().await?;
     emit(
