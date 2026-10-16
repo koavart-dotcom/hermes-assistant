@@ -8,6 +8,7 @@ import { SettingsPage } from "@/features/settings/SettingsPage";
 import { SetupPage } from "@/features/setup/SetupPage";
 import { TicketsPage } from "@/features/tickets/TicketsPage";
 import { HudWindow } from "@/features/voice/HudWindow";
+import { CommandsPage } from "@/features/commands/CommandsPage";
 
 export function App() {
   return (
@@ -20,6 +21,7 @@ export function App() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/voice" element={<VoicePage />} />
+        <Route path="/commands" element={<CommandsPage />} />
         <Route path="/status" element={<StatusPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/setup" element={<SetupPage />} />

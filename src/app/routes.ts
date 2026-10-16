@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Activity, MessageSquare, Mic, Settings, ShieldCheck, Wand2 } from "lucide-react";
+import { Activity, ListChecks, MessageSquare, Mic, Settings, ShieldCheck, Wand2 } from "lucide-react";
 
 export interface RouteDef {
   path: string;
@@ -12,6 +12,7 @@ export const routes: RouteDef[] = [
   { path: "/chat", title: "Чат", icon: MessageSquare },
   { path: "/approvals", title: "Подтверждения", icon: ShieldCheck },
   { path: "/voice", title: "Голос", icon: Mic },
+  { path: "/commands", title: "Команды", icon: ListChecks },
   { path: "/status", title: "Состояние", icon: Activity },
   { path: "/settings", title: "Настройки", icon: Settings },
   { path: "/setup", title: "Установка", icon: Wand2 },
