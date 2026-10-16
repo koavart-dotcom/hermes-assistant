@@ -174,7 +174,18 @@ impl QuickPack {
                 let score = if phrase == query {
                     1.0
                 } else {
-                    similarity(&phrase, &query)
+                    // Whole phrase inside a longer utterance ("открой мне браузер
+                    // на втором мониторе" contains "открой браузер"): accept
+                    // when at most 3 extra words surround it.
+                    let pw: Vec<&str> = phrase.split(' ').collect();
+                    let qw: Vec<&str> = query.split(' ').collect();
+                    let contained = pw.iter().all(|w| qw.contains(w));
+                    let extra = qw.len().saturating_sub(pw.len());
+                    if contained && extra <= 3 {
+                        0.9 - 0.02 * extra as f64
+                    } else {
+                        similarity(&phrase, &query)
+                    }
                 };
                 if score >= MATCH_THRESHOLD && best.is_none_or(|(s, _)| score > s) {
                     best = Some((score, c));
@@ -691,6 +702,14 @@ mod tests {
             "win.desktop"
         );
         assert_eq!(p.find("гермес открой телеграм").unwrap().id, "app.telegram");
+        // Phrase inside a longer utterance (Whisper adds filler and context).
+        assert_eq!(
+            p.find("джарвис открой мне браузер на втором экране")
+                .unwrap()
+                .id,
+            "app.chrome"
+        );
+        assert_eq!(p.find("открой браузер").unwrap().id, "app.chrome");
         // Whisper-style small slip.
         assert_eq!(p.find("сделай громчи").unwrap().id, "snd.up");
         let m = p.find("выключи компьютер").unwrap();

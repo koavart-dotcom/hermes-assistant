@@ -53,7 +53,7 @@
     { "id": "scr.off", "name": "Выключить монитор", "phrases": ["выключи монитор", "выключить монитор", "погаси экран", "выключи экран"], "actions": ["say:Запуск_Действие/Выключаю", "pause:800", "monitor:off"] },
     { "id": "scr.on", "name": "Включить монитор", "phrases": ["включи монитор", "включить монитор", "включи экран"], "actions": ["monitor:on", "say:Запуск_Действие/Включаю"] },
 
-    { "id": "app.chrome", "name": "Открыть Google Chrome", "phrases": ["открой хром", "открой google chrome", "открой гугл хром", "запусти хром", "хром", "браузер"], "actions": ["say:Запуск_Действие/Запускаю", "app:chrome|Google Chrome"] },
+    { "id": "app.chrome", "name": "Открыть Google Chrome", "phrases": ["открой браузер", "запусти браузер", "включи браузер", "открой хром", "открой google chrome", "открой гугл хром", "запусти хром", "хром", "браузер"], "actions": ["say:Запуск_Действие/Запускаю", "app:chrome|Google Chrome"] },
     { "id": "app.telegram", "name": "Открыть Telegram", "phrases": ["открой телеграм", "открой телегу", "запусти телеграм", "телеграм"], "actions": ["say:Запуск_Действие/Запускаю", "app:Telegram|telegram"] },
     { "id": "app.vscode", "name": "Открыть VS Code", "phrases": ["открой вс код", "открой vs code", "открой код", "запусти вс код"], "actions": ["say:Запуск_Действие/Запускаю", "app:code|Visual Studio Code"] },
     { "id": "app.steam", "name": "Открыть Steam", "phrases": ["открой стим", "запусти стим", "стим"], "actions": ["say:Запуск_Действие/Запускаю", "app:steam|Steam"] },
