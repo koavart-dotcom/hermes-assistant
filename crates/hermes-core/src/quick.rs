@@ -1062,6 +1062,11 @@ mod tests {
         );
         // Fixed phrases still win and carry no query.
         assert!(p.find("открой браузер").unwrap().query.is_none());
+        // "включи видео" is the open video, not a YouTube search for «видео».
+        let m = p.find("джарвис включи видео").unwrap();
+        assert_eq!(m.id, "media.video_play");
+        assert!(m.query.is_none());
+        assert_eq!(p.find("включи котиков").unwrap().id, "web.play");
         // A bare prefix without a query is not a match.
         assert!(
             p.find("найди в ютубе").is_none() || p.find("найди в ютубе").unwrap().query.is_none()

@@ -58,11 +58,25 @@ export function VoiceRuntime() {
         timer = setTimeout(flush, 40);
       }
     });
+    // Presses from the floating reactor. A lost "up" (window closed on
+    // double-click, focus lost) would leave the microphone recording and the
+    // always-listening stream stopped, so a watchdog ends the press after 20 s.
+    let watchdog: ReturnType<typeof setTimeout> | null = null;
     let unlisten: (() => void) | undefined;
-    onHudPtt((down) => void (down ? pttStart() : pttStop())).then((u) => (unlisten = u));
+    onHudPtt((down) => {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = null;
+      if (down) {
+        void pttStart();
+        watchdog = setTimeout(() => void pttStop(), 20_000);
+      } else {
+        void pttStop();
+      }
+    }).then((u) => (unlisten = u));
     return () => {
       unsub();
       if (timer) clearTimeout(timer);
+      if (watchdog) clearTimeout(watchdog);
       unlisten?.();
     };
   }, []);

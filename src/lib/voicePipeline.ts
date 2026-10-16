@@ -206,7 +206,12 @@ async function transcribeSamples(samples: Float32Array, sampleRate: number): Pro
 
 export async function pttStart(): Promise<void> {
   const v = useVoiceStore.getState();
-  if (recorder || (v.phase !== "idle" && v.phase !== "listening" && v.phase !== "speaking")) return;
+  if (recorder) {
+    // A press that never got its release (window closed mid-press): finish it first.
+    await pttStop();
+    return;
+  }
+  if (v.phase !== "idle" && v.phase !== "listening" && v.phase !== "speaking") return;
   stopSpeaking();
   v.setError(null);
   try {

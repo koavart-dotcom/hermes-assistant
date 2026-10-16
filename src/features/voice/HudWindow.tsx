@@ -18,6 +18,11 @@ export function HudWindow() {
   useEffect(() => {
     document.documentElement.classList.add("hud-window");
     if (!isTauri()) return;
+    // Any way the press can end outside the button must release push-to-talk.
+    const release = () => void emitHudPtt(false);
+    window.addEventListener("mouseup", release);
+    window.addEventListener("blur", release);
+    window.addEventListener("beforeunload", release);
     let unlisten: (() => void) | undefined;
     onVoiceState((s) => {
       const p = PHASES.includes(s.phase as VoicePhase) ? (s.phase as VoicePhase) : "idle";
@@ -25,6 +30,10 @@ export function HudWindow() {
       setPhase(p);
     }).then((u) => (unlisten = u));
     return () => {
+      window.removeEventListener("mouseup", release);
+      window.removeEventListener("blur", release);
+      window.removeEventListener("beforeunload", release);
+      release();
       unlisten?.();
       document.documentElement.classList.remove("hud-window");
     };
@@ -44,7 +53,10 @@ export function HudWindow() {
         onMouseDown={(e) => e.button === 0 && void emitHudPtt(true)}
         onMouseUp={(e) => e.button === 0 && void emitHudPtt(false)}
         onMouseLeave={() => void emitHudPtt(false)}
-        onDoubleClick={() => void api.hudWindowClose()}
+        onDoubleClick={() => {
+          void emitHudPtt(false);
+          void api.hudWindowClose();
+        }}
         title={`Джарвис: ${phase}. Удерживайте — говорите; двойной клик — закрыть.`}
         aria-label="Нажмите и говорите"
       >

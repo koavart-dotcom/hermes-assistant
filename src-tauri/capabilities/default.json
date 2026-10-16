@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Minimal capability for the main, tickets and hud windows",
   "windows": ["main", "tickets", "hud"],
-  "permissions": ["core:default", "log:default", "store:default", "updater:default", "process:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging", "log:default", "store:default", "updater:default", "process:default"]
 }
