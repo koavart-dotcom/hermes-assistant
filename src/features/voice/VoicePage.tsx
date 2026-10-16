@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ear, Keyboard, Loader2, Mic, Volume2, VolumeX } from "lucide-react";
 import { PageShell } from "@/app/PageShell";
+import { JarvisHud } from "@/features/voice/JarvisHud";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -36,7 +37,6 @@ export function VoicePage() {
   const status = useQuery({ queryKey: ["voice_status"], queryFn: api.voiceStatus, enabled: isTauri(), refetchInterval: 10_000 });
   const mode = useVoiceStore((s) => s.mode);
   const phase = useVoiceStore((s) => s.phase);
-  const level = useVoiceStore((s) => s.level);
   const transcript = useVoiceStore((s) => s.transcript);
   const answer = useVoiceStore((s) => s.answer);
   const error = useVoiceStore((s) => s.error);
@@ -165,8 +165,7 @@ export function VoicePage() {
         <button
           type="button"
           className={cn(
-            "flex size-32 items-center justify-center rounded-full border-4 text-primary-foreground transition-colors select-none",
-            phase === "recording" ? "border-red-400 bg-red-500" : phase === "listening" ? "border-emerald-400 bg-emerald-600" : "border-primary/40 bg-primary",
+            "relative flex size-60 items-center justify-center rounded-full select-none outline-none focus-visible:ring-2 focus-visible:ring-ring",
             !canTalk && "opacity-40",
           )}
           disabled={!canTalk}
@@ -176,10 +175,15 @@ export function VoicePage() {
           onTouchStart={() => void pttStart()}
           onTouchEnd={() => void pttStop()}
           aria-label="Нажмите и говорите"
-          style={{ boxShadow: phase === "recording" || phase === "listening" ? `0 0 0 ${Math.round(Math.min(1, level) * 24)}px rgba(239,68,68,0.35)` : undefined }}
         >
-          {phase === "transcribing" || phase === "thinking" ? <Loader2 className="size-10 animate-spin" /> : phase === "listening" ? <Ear className="size-10" /> : <Mic className="size-10" />}
+          <JarvisHud size={240} />
+          {phase === "transcribing" || phase === "thinking" ? (
+            <Loader2 className="absolute size-6 animate-spin text-foreground/70" aria-hidden />
+          ) : null}
         </button>
+        <Button size="sm" variant="outline" onClick={() => void api.hudWindowOpen()} disabled={!isTauri()}>
+          Джарвис поверх окон
+        </Button>
         <p className="text-sm text-muted-foreground" data-testid="voice-phase">
           {PHASE_TEXT[phase] ?? phase}
         </p>

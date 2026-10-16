@@ -156,6 +156,8 @@ pub fn run() {
             commands::tickets_fetch,
             commands::tickets_window_open,
             commands::open_url,
+            commands::hud_window_open,
+            commands::hud_window_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

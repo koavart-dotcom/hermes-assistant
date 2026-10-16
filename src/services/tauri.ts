@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppInfo } from "@/types/generated/AppInfo";
 import type { EnvKey } from "@/types/generated/EnvKey";
 import type { EnvPreset } from "@/types/generated/EnvPreset";
@@ -70,6 +70,8 @@ export const api = {
   ticketsFetch: () => invoke<TicketsSnapshot>("tickets_fetch"),
   ticketsWindowOpen: () => invoke<void>("tickets_window_open"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  hudWindowOpen: () => invoke<void>("hud_window_open"),
+  hudWindowClose: () => invoke<void>("hud_window_close"),
 };
 
 /** One decision line of the hermes_permissions plugin (hermes_permissions.log). */
@@ -107,4 +109,27 @@ export function onChatEvent(handler: (envelope: ChatEnvelope) => void): Promise<
 /** True when running inside the Tauri webview (false in the browser / vitest). */
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+// ---- Cross-window voice state (main window → floating HUD window) ----
+
+export interface VoiceStateEvent {
+  phase: string;
+  level: number;
+}
+export const VOICE_STATE_EVENT = "voice:state";
+/** Button presses in the HUD window → main window (push-to-talk). */
+export const HUD_PTT_EVENT = "hud:ptt";
+
+export function emitVoiceState(state: VoiceStateEvent): Promise<void> {
+  return emit(VOICE_STATE_EVENT, state);
+}
+export function onVoiceState(handler: (s: VoiceStateEvent) => void): Promise<UnlistenFn> {
+  return listen<VoiceStateEvent>(VOICE_STATE_EVENT, (e) => handler(e.payload));
+}
+export function emitHudPtt(down: boolean): Promise<void> {
+  return emit(HUD_PTT_EVENT, { down });
+}
+export function onHudPtt(handler: (down: boolean) => void): Promise<UnlistenFn> {
+  return listen<{ down: boolean }>(HUD_PTT_EVENT, (e) => handler(e.payload.down));
 }

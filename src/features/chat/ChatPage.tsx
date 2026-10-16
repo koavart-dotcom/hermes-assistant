@@ -110,6 +110,8 @@ export function ChatPage() {
         }
         const r = await api.quickRun(quick.id, false);
         addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
+        if (r.ui === "hud") await api.hudWindowOpen();
+        if (r.ui === "hud_off") await api.hudWindowClose();
         if (r.ui === "tickets") {
           await api.ticketsWindowOpen();
           const snap = await api.ticketsFetch();

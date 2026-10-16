@@ -358,6 +358,51 @@ pub fn tickets_window_open(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+pub const HUD_WINDOW: &str = "hud";
+
+/// Frameless, transparent, always-on-top reactor in the bottom-right corner.
+#[tauri::command]
+pub fn hud_window_open(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window(HUD_WINDOW) {
+        w.show().map_err(err)?;
+        return Ok(());
+    }
+    let size = 220.0;
+    let w = tauri::WebviewWindowBuilder::new(
+        &app,
+        HUD_WINDOW,
+        tauri::WebviewUrl::App("index.html#/hud".into()),
+    )
+    .title("Джарвис")
+    .inner_size(size, size)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .build()
+    .map_err(err)?;
+    // Bottom-right of the primary monitor, above the taskbar.
+    if let Ok(Some(m)) = w.primary_monitor() {
+        let scale = m.scale_factor();
+        let area = m.work_area();
+        let x = (area.position.x as f64 + area.size.width as f64) / scale - size - 16.0;
+        let y = (area.position.y as f64 + area.size.height as f64) / scale - size - 16.0;
+        let _ = w.set_position(tauri::LogicalPosition::new(x, y));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn hud_window_close(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window(HUD_WINDOW) {
+        w.close().map_err(err)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn open_url(url: String) -> Result<(), String> {
     hermes_core::quick::open_url(&url).await.map_err(err)

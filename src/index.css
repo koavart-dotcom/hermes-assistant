@@ -143,3 +143,10 @@
     @apply font-sans;
   }
 }
+
+/* Frameless transparent HUD window (route #/hud): nothing but the reactor. */
+.hud-window,
+.hud-window body,
+.hud-window #root {
+  background: transparent !important;
+}

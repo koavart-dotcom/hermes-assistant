@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { isTauri, onChatEvent } from "@/services/tauri";
-import { applyMode, speakAnswer } from "@/lib/voicePipeline";
+import { emitVoiceState, isTauri, onChatEvent, onHudPtt } from "@/services/tauri";
+import { applyMode, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
 import { useVoiceStore } from "@/stores/voice";
 
 /**
@@ -33,6 +33,38 @@ export function VoiceRuntime() {
       }
     }).then((u) => (unlisten = u));
     return () => unlisten?.();
+  }, []);
+
+  // Mirror phase/level to the floating HUD window (≤ 25 fps) and take its presses.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending = false;
+    const flush = () => {
+      timer = null;
+      pending = false;
+      const s = useVoiceStore.getState();
+      void emitVoiceState({ phase: s.phase, level: s.level });
+    };
+    const unsub = useVoiceStore.subscribe((s, prev) => {
+      if (s.phase === prev.phase && s.level === prev.level) return;
+      if (s.phase !== prev.phase) {
+        if (timer) clearTimeout(timer);
+        flush();
+        return;
+      }
+      if (!pending) {
+        pending = true;
+        timer = setTimeout(flush, 40);
+      }
+    });
+    let unlisten: (() => void) | undefined;
+    onHudPtt((down) => void (down ? pttStart() : pttStop())).then((u) => (unlisten = u));
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+      unlisten?.();
+    };
   }, []);
 
   return null;

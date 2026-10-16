@@ -239,7 +239,7 @@ pub enum Action {
     Restart,
     Shutdown,
     StopSpeech,
-    /// Ask the shell UI to open something (`tickets`); no-op in the executor.
+    /// Ask the shell UI to open something (`tickets`, `hud`, `hud_off`); no-op in the executor.
     Ui(String),
 }
 
@@ -315,7 +315,7 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "shutdown" => Action::Shutdown,
         "stop_speech" => Action::StopSpeech,
         "ui" => {
-            if !matches!(arg, "tickets") {
+            if !matches!(arg, "tickets" | "hud" | "hud_off") {
                 return Err(format!("unknown ui target `{arg}`"));
             }
             Action::Ui(arg.to_string())

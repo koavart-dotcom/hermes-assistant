@@ -23,9 +23,41 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+let audioCtx: AudioContext | null = null;
+let levelTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Feed the spoken answer's loudness into `level` so the HUD moves with the voice. */
+function watchSpeechLevel(a: HTMLAudioElement): void {
+  stopSpeechLevel();
+  try {
+    audioCtx ??= new AudioContext();
+    const src = audioCtx.createMediaElementSource(a);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    const buf = new Float32Array(analyser.fftSize);
+    levelTimer = setInterval(() => {
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (const x of buf) sum += x * x;
+      useVoiceStore.getState().setLevel(Math.min(1, Math.sqrt(sum / buf.length) * 4));
+    }, 40);
+  } catch {
+    /* no Web Audio: the HUD just pulses without amplitude */
+  }
+}
+
+function stopSpeechLevel(): void {
+  if (levelTimer) clearInterval(levelTimer);
+  levelTimer = null;
+  useVoiceStore.getState().setLevel(0);
+}
+
 export function stopSpeaking(): void {
   audio?.pause();
   audio = null;
+  stopSpeechLevel();
   const s = useVoiceStore.getState();
   if (s.phase === "speaking") s.setPhase(s.mode === "wake" ? "listening" : "idle");
 }
@@ -106,8 +138,10 @@ export async function confirmPendingQuick(yes: boolean): Promise<void> {
 /** UI targets of quick commands (`ui:tickets`): open the window, speak the summary. */
 export async function showUi(target: string): Promise<void> {
   const v = useVoiceStore.getState();
-  if (target !== "tickets") return;
   try {
+    if (target === "hud") await api.hudWindowOpen();
+    if (target === "hud_off") await api.hudWindowClose();
+    if (target !== "tickets") return;
     await api.ticketsWindowOpen();
     const snap = await api.ticketsFetch();
     await speakAnswer(snap.summary);
@@ -131,9 +165,11 @@ export async function speakAnswer(content: string): Promise<void> {
     stopSpeaking();
     const a = new Audio(url);
     audio = a;
+    watchSpeechLevel(a);
     const done = () => {
       if (audio === a) {
         audio = null;
+        stopSpeechLevel();
         useVoiceStore.getState().setPhase(idlePhase());
       }
     };
