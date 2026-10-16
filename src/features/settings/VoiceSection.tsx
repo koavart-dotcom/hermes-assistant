@@ -58,8 +58,8 @@ export function VoiceSection() {
   const changed = d && prefs.data && (JSON.stringify(d) !== JSON.stringify(prefs.data) || wakeText !== prefs.data.wake_words.join(", "));
 
   return (
-    <section className="mt-8 max-w-xl space-y-3 text-sm" aria-labelledby="voice-title">
-      <h2 id="voice-title" className="flex items-center gap-2 font-semibold">
+    <section className="hud-panel mt-6 max-w-xl space-y-3 p-4 text-sm" aria-labelledby="voice-title">
+      <h2 id="voice-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <Volume2 className="size-4" /> Голос Джарвиса
       </h2>
       {!enabled ? <p className="text-muted-foreground">Доступно только внутри приложения.</p> : null}

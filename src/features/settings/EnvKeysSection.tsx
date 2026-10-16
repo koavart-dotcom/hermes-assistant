@@ -69,8 +69,8 @@ export function EnvKeysSection() {
   );
 
   return (
-    <section className="mt-8 max-w-xl space-y-3 text-sm" aria-labelledby="env-keys-title">
-      <h2 id="env-keys-title" className="flex items-center gap-2 font-semibold">
+    <section className="hud-panel mt-6 max-w-xl space-y-3 p-4 text-sm" aria-labelledby="env-keys-title">
+      <h2 id="env-keys-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <KeyRound className="size-4" /> Интеграции и ключи
       </h2>
       <p className="text-muted-foreground">
@@ -93,7 +93,7 @@ export function EnvKeysSection() {
         />
       ))}
 
-      <div className="rounded-lg border p-3">
+      <div className="rounded-lg border border-border/70 bg-background/40 p-3">
         <p className="font-medium">Другой ключ</p>
         <p className="mb-2 text-xs text-muted-foreground">
           Имя переменной заглавными буквами, как её ждёт skill или инструмент Hermes (например,
@@ -152,7 +152,7 @@ function PresetCard({
 }) {
   const configured = preset.keys.every((k) => byName.get(k)?.masked);
   return (
-    <div className="rounded-lg border p-3" data-testid={`preset-${preset.id}`}>
+    <div className="rounded-lg border border-border/70 bg-background/40 p-3" data-testid={`preset-${preset.id}`}>
       <p className="flex items-center gap-2 font-medium">
         {preset.title}
         <span className={configured ? "text-xs text-emerald-600" : "text-xs text-muted-foreground"}>

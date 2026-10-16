@@ -64,8 +64,8 @@ export function SpeechSection() {
   const changed = d && current.data && JSON.stringify(d) !== JSON.stringify(current.data);
 
   return (
-    <section className="mt-8 max-w-xl space-y-3 text-sm" aria-labelledby="speech-title">
-      <h2 id="speech-title" className="flex items-center gap-2 font-semibold">
+    <section className="hud-panel mt-6 max-w-xl space-y-3 p-4 text-sm" aria-labelledby="speech-title">
+      <h2 id="speech-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <AudioLines className="size-4" /> Распознавание и озвучка
       </h2>
       <p className="text-muted-foreground">Распознаёт Whisper на вашей видеокарте. Изменения перезапускают сервер голоса; новая модель или голос скачиваются при первом использовании.</p>

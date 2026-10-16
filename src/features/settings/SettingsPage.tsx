@@ -49,8 +49,8 @@ export function SettingsPage() {
       title="Настройки"
       description="Модель, распознавание и озвучка, голос Джарвиса, ключи сервисов, обновления."
     >
-      <section className="max-w-xl space-y-3 text-sm">
-        <h2 className="font-semibold">Обновления</h2>
+      <section className="hud-panel max-w-xl space-y-3 p-4 text-sm">
+        <h2 className="hud-label">Обновления</h2>
         <p>
           Версия приложения:{" "}
           <span data-testid="settings-version">
@@ -90,8 +90,8 @@ export function SettingsPage() {
         ) : null}
       </section>
 
-      <section className="mt-8 max-w-xl space-y-2 text-sm">
-        <h2 className="font-semibold">Автозапуск</h2>
+      <section className="hud-panel mt-6 max-w-xl space-y-2 p-4 text-sm">
+        <h2 className="hud-label">Автозапуск</h2>
         <p className="text-muted-foreground">
           Приложение регистрирует себя в автозагрузке Windows при каждом запуске (ключ реестра Run
           текущего пользователя), поэтому после перезагрузки Ollama и помощник поднимаются сами.

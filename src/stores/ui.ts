@@ -16,7 +16,7 @@ function readStoredTheme(): Theme {
   } catch {
     /* storage unavailable */
   }
-  return "system";
+  return "dark"; // the HUD is designed dark-first; light stays one click away
 }
 
 export function applyTheme(theme: Theme) {

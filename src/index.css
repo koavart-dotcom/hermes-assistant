@@ -6,75 +6,114 @@
 /* Design tokens: light by default, dark via .dark on <html> (Zustand ui store). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Hermes design tokens — HUD «Джарвис» (см. docs/DESIGN_SYSTEM.md).
+ * Dark is the default (the reactor lives on a dark deck); light is a calm
+ * paper variant with the same cyan accent. All colours are oklch so that
+ * the cyan keeps its character across both themes.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Brand */
+  --hud: oklch(0.82 0.12 222); /* reactor cyan, #4fd1ff */
+  --hud-strong: oklch(0.7 0.14 225);
+  --hud-soft: oklch(0.82 0.12 222 / 12%);
+  --hud-line: oklch(0.82 0.12 222 / 28%);
+  --amber: oklch(0.8 0.15 70); /* recording / attention */
+  --violet: oklch(0.72 0.16 300); /* thinking */
+
+  /* Light theme (paper) */
+  --background: oklch(0.985 0.004 240);
+  --foreground: oklch(0.2 0.03 250);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --card-foreground: oklch(0.2 0.03 250);
+  --muted: oklch(0.955 0.008 240);
+  --muted-foreground: oklch(0.5 0.03 245);
+  --primary: oklch(0.55 0.13 228);
+  --primary-foreground: oklch(0.99 0.005 240);
+  --accent: oklch(0.94 0.02 230);
+  --accent-foreground: oklch(0.25 0.04 250);
+  --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --radius: 0.625rem;
+  --success: oklch(0.6 0.15 160);
+  --warning: oklch(0.7 0.16 70);
+  --info: oklch(0.6 0.13 228);
+  --border: oklch(0.88 0.015 240);
+  --input: oklch(0.88 0.015 240);
+  --ring: oklch(0.62 0.13 228);
+  --sidebar: oklch(0.965 0.008 240);
+  --sidebar-foreground: oklch(0.2 0.03 250);
+  --sidebar-primary: oklch(0.55 0.13 228);
+  --sidebar-primary-foreground: oklch(0.99 0.005 240);
+  --sidebar-accent: oklch(0.93 0.02 230);
+  --sidebar-accent-foreground: oklch(0.2 0.03 250);
+  --sidebar-border: oklch(0.88 0.015 240);
+  --sidebar-ring: oklch(0.62 0.13 228);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.2 0.03 250);
+  --secondary: oklch(0.955 0.008 240);
+  --secondary-foreground: oklch(0.25 0.04 250);
+  --chart-1: oklch(0.55 0.13 228);
+  --chart-2: oklch(0.7 0.14 225);
+  --chart-3: oklch(0.72 0.16 300);
+  --chart-4: oklch(0.7 0.16 70);
+  --chart-5: oklch(0.6 0.15 160);
+
+  /* Shape, elevation, motion */
+  --radius: 0.75rem;
+  --shadow-sm: 0 1px 2px oklch(0.2 0.03 250 / 8%);
+  --shadow-md: 0 4px 12px oklch(0.2 0.03 250 / 10%);
+  --shadow-lg: 0 12px 32px oklch(0.2 0.03 250 / 14%);
+  --glow: 0 0 0 1px var(--hud-line), 0 0 24px oklch(0.82 0.12 222 / 18%);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 400ms;
+  --ease-hud: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --z-sticky: 10;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-toast: 60;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.15 0.018 252); /* deck */
+  --foreground: oklch(0.93 0.01 230);
+  --card: oklch(0.19 0.022 252);
+  --card-foreground: oklch(0.93 0.01 230);
+  --muted: oklch(0.24 0.024 252);
+  --muted-foreground: oklch(0.68 0.03 235);
+  --primary: oklch(0.82 0.12 222);
+  --primary-foreground: oklch(0.14 0.03 250);
+  --accent: oklch(0.26 0.03 250);
+  --accent-foreground: oklch(0.95 0.01 230);
+  --destructive: oklch(0.68 0.19 25);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --success: oklch(0.75 0.15 160);
+  --warning: oklch(0.8 0.15 70);
+  --info: oklch(0.82 0.12 222);
+  --border: oklch(0.82 0.12 222 / 14%);
+  --input: oklch(0.82 0.12 222 / 18%);
+  --ring: oklch(0.82 0.12 222 / 70%);
+  --sidebar: oklch(0.13 0.018 252);
+  --sidebar-foreground: oklch(0.93 0.01 230);
+  --sidebar-primary: oklch(0.82 0.12 222);
+  --sidebar-primary-foreground: oklch(0.14 0.03 250);
+  --sidebar-accent: oklch(0.22 0.026 252);
+  --sidebar-accent-foreground: oklch(0.95 0.01 230);
+  --sidebar-border: oklch(0.82 0.12 222 / 12%);
+  --sidebar-ring: oklch(0.82 0.12 222 / 70%);
+  --popover: oklch(0.19 0.022 252);
+  --popover-foreground: oklch(0.93 0.01 230);
+  --secondary: oklch(0.24 0.024 252);
+  --secondary-foreground: oklch(0.93 0.01 230);
+  --chart-1: oklch(0.82 0.12 222);
+  --chart-2: oklch(0.7 0.14 225);
+  --chart-3: oklch(0.72 0.16 300);
+  --chart-4: oklch(0.8 0.15 70);
+  --chart-5: oklch(0.75 0.15 160);
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 40%);
+  --shadow-md: 0 4px 14px oklch(0 0 0 / 45%);
+  --shadow-lg: 0 12px 36px oklch(0 0 0 / 55%);
+  --glow: 0 0 0 1px var(--hud-line), 0 0 28px oklch(0.82 0.12 222 / 22%);
 }
 
 @theme inline {
@@ -94,6 +133,21 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-hud: var(--hud);
+  --color-hud-strong: var(--hud-strong);
+  --color-hud-soft: var(--hud-soft);
+  --color-hud-line: var(--hud-line);
+  --color-amber: var(--amber);
+  --color-violet: var(--violet);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-glow: var(--glow);
+  --font-mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+  --ease-hud: var(--ease-hud);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -132,16 +186,56 @@
   }
   body {
     @apply antialiased bg-background text-foreground;
-    font-family:
-      ui-sans-serif,
-      system-ui,
-      "Segoe UI",
-      Roboto,
-      sans-serif;
+    font-family: "Geist Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
   }
   html {
     @apply font-sans;
+    color-scheme: light;
   }
+  html.dark {
+    color-scheme: dark;
+  }
+  ::selection {
+    background: var(--hud-soft);
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: oklch(0.82 0.12 222 / 25%);
+    border: 3px solid transparent;
+    background-clip: padding-box;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.82 0.12 222 / 45%);
+    background-clip: padding-box;
+  }
+}
+
+/* HUD utilities — the few recurring visual motifs, named once. */
+@utility hud-panel {
+  @apply rounded-lg border bg-card/80;
+  box-shadow: var(--shadow-sm);
+}
+@utility hud-panel-glow {
+  @apply rounded-lg border border-hud-line bg-card/80;
+  box-shadow: var(--glow);
+}
+@utility hud-label {
+  @apply text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground;
+}
+@utility hud-grid {
+  background-image:
+    linear-gradient(var(--hud-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hud-soft) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+}
+@utility hud-hairline {
+  background: linear-gradient(90deg, transparent, var(--hud-line), transparent);
+  height: 1px;
 }
 
 /* Frameless transparent HUD window (route #/hud): nothing but the reactor. */

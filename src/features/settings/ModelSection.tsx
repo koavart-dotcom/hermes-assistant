@@ -86,8 +86,8 @@ export function ModelSection() {
   const changed = selected && (selected.id !== currentId || (selected.provider !== "custom" && effectiveName.trim() !== (cur?.model ?? "")));
 
   return (
-    <section className="mt-8 max-w-xl space-y-3 text-sm" aria-labelledby="model-title">
-      <h2 id="model-title" className="flex items-center gap-2 font-semibold">
+    <section className="hud-panel mt-6 max-w-xl space-y-3 p-4 text-sm" aria-labelledby="model-title">
+      <h2 id="model-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <Brain className="size-4" /> Модель
       </h2>
       <p className="text-muted-foreground">
@@ -116,7 +116,7 @@ export function ModelSection() {
           {apply.isPending ? "Применяю…" : "Применить и перезапустить Hermes"}
         </Button>
       </div>
-      <div className="rounded-lg border p-3">
+      <div className="rounded-lg border border-border/70 bg-background/40 p-3">
         <p className="font-medium">Скачать модель Ollama</p>
         <p className="mb-2 text-xs text-muted-foreground">Например, qwen3.5:14b или gemma4:12b. Файлы идут на диск D:, прогресс ниже.</p>
         <div className="flex gap-2">

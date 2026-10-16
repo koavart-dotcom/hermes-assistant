@@ -118,8 +118,8 @@ export function VoicePage() {
             onClick={() => setMode(id)}
             aria-pressed={mode === id}
             className={cn(
-              "rounded-lg border p-3 text-left text-sm transition-colors",
-              mode === id ? "border-primary bg-primary/10" : "hover:bg-accent/60",
+              "rounded-lg border p-3 text-left text-sm transition-all duration-(--duration-base)",
+              mode === id ? "border-hud-line bg-hud-soft shadow-glow" : "hud-panel hover:bg-accent/60",
             )}
           >
             <span className="flex items-center gap-2 font-medium">
@@ -161,7 +161,7 @@ export function VoicePage() {
         </div>
       ) : null}
 
-      <div className="flex max-w-xl flex-col items-center gap-4">
+      <div className="hud-grid relative flex max-w-xl flex-col items-center gap-4 rounded-2xl py-4">
         <button
           type="button"
           className={cn(

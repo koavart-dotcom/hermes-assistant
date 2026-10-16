@@ -16,3 +16,6 @@ tools/mcp-claude-bridge/bridge.token
 tools/mcp-claude-bridge/bridge.log
 __pycache__/
 *.pyc
+
+# Playwright MCP screenshots and snapshots
+.playwright-mcp/

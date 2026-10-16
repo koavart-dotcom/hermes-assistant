@@ -28,8 +28,11 @@ export function TicketsPage() {
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
-      <header className="flex items-center gap-2 border-b px-3 py-2">
+      <header className="relative flex items-center gap-2 px-3 py-2">
+        <span className="hud-label">Hermes</span>
+        <span className="h-3 w-px bg-hud-line" aria-hidden />
         <h1 className="text-sm font-semibold">Мои тикеты</h1>
+        <span className="hud-hairline absolute inset-x-0 bottom-0" aria-hidden />
         {s ? <span className="text-xs text-muted-foreground">обновлено {ago(new Date(s.fetched_at * 1000).toISOString())}</span> : null}
         <span className="flex-1" />
         <Button size="sm" variant="ghost" onClick={() => void q.refetch()} disabled={q.isFetching} aria-label="Обновить">
@@ -77,7 +80,7 @@ function Section({ title, items }: { title: string; items: Ticket[] }) {
 function TicketCard({ t }: { t: Ticket }) {
   const fresh = t.mark !== "working";
   return (
-    <li className={cn("rounded-lg border p-2", fresh && "border-primary/50 bg-primary/5")}>
+    <li className={cn("hud-panel p-2", fresh && "border-hud-line bg-hud-soft")}>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium" title={t.subject}>

@@ -176,9 +176,9 @@ export function ChatPage() {
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r">
+      <aside className="flex w-60 shrink-0 flex-col border-r bg-sidebar/60">
         <div className="flex h-14 items-center justify-between border-b px-3">
-          <span className="text-sm font-semibold">Диалоги</span>
+          <span className="hud-label">Диалоги</span>
           <Button size="sm" variant="outline" onClick={newSession} disabled={!gatewayUp} aria-label="Новый диалог">
             <Plus className="size-4" />
           </Button>
@@ -278,7 +278,7 @@ export function ChatPage() {
           <div className="mx-auto flex max-w-3xl items-end gap-2">
             <textarea
               ref={textareaRef}
-              className="min-h-[44px] max-h-40 flex-1 resize-y rounded-md border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-[44px] max-h-40 flex-1 resize-y rounded-lg border bg-card/60 px-3 py-2 text-sm outline-none transition-shadow duration-(--duration-base) focus-visible:border-hud-line focus-visible:shadow-glow"
               placeholder={gatewayUp ? "Сообщение… (Enter — отправить, Shift+Enter — перенос строки)" : "Hermes не запущен"}
               value={draft}
               disabled={!gatewayUp || busy}
@@ -313,8 +313,8 @@ function TurnView({ turn }: { turn: Turn }) {
     <div className={cn("flex", user ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[85%] rounded-lg px-4 py-2 text-sm",
-          user ? "bg-primary text-primary-foreground" : "bg-muted",
+          "max-w-[85%] rounded-lg px-4 py-2.5 text-sm",
+          user ? "border border-hud-line bg-hud-soft text-foreground" : "hud-panel",
         )}
       >
         {turn.tools?.length ? (

@@ -31,7 +31,7 @@ export function StatusPage() {
   const s = status.data;
   return (
     <PageShell title="Состояние" description="Приложение, Hermes Agent, локальные модели.">
-      <dl className="grid max-w-xl grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+      <dl className="hud-panel grid max-w-xl grid-cols-[auto_1fr] gap-x-6 gap-y-3 p-4 text-sm">
         <dt className="text-muted-foreground">Приложение</dt>
         <dd data-testid="app-version">{info.data ? `${info.data.name} ${info.data.version}` : "…"}</dd>
 
