@@ -382,6 +382,8 @@ pub enum Action {
     TicketDraft(u64),
     /// Open ticket N in the browser.
     TicketOpen(u64),
+    /// Hand a task to Claude Code through the Hermes MCP bridge (`claude_task`).
+    ClaudeTask(String),
 }
 
 pub const KEY_NAMES: &[&str] = &[
@@ -478,6 +480,12 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "type" => Action::TypeText(arg.to_string()),
         "ticket_draft" => Action::TicketDraft(parse_ticket(arg)?),
         "ticket_open" => Action::TicketOpen(parse_ticket(arg)?),
+        "claude" => {
+            if arg.is_empty() {
+                return Err("claude needs a task".into());
+            }
+            Action::ClaudeTask(arg.to_string())
+        }
         other => return Err(format!("unknown action `{other}`")),
     })
 }
@@ -581,6 +589,8 @@ pub struct Executor {
     /// Reaction clip volume 0..1 and the silent switch (from preferences).
     pub volume: f64,
     pub silent: bool,
+    /// Project for `claude:` tasks (from preferences).
+    pub claude_project: String,
 }
 
 /// What the shell should do after the actions ran.
@@ -602,6 +612,7 @@ impl Executor {
             last_query: None,
             volume: 1.0,
             silent: false,
+            claude_project: "hermes-assistant".into(),
         }
     }
 
@@ -658,6 +669,15 @@ impl Executor {
                     ));
                     out.handoff = Some(crate::freescout::draft_prompt(&conv));
                     out.ticket = Some(conv.id);
+                }
+                Action::ClaudeTask(task) => {
+                    out.spoken = Some("Передаю Клоду.".into());
+                    out.handoff = Some(format!(
+                        "Используй инструмент claude_task (MCP-сервер claude) с параметрами project=\"{}\" и task=\"{}\". \
+Дождись результата и перескажи его по-русски кратко: что сделано и что вернул Клод.",
+                        self.claude_project,
+                        task.replace('"', "'")
+                    ));
                 }
                 Action::TicketOpen(n) => {
                     let cfg = crate::freescout::config(&self.layout)?

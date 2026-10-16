@@ -26,4 +26,8 @@ voice_pack: string,
 /**
  * Helpdesk digest schedule.
  */
-digest: Digest, };
+digest: Digest, 
+/**
+ * Project name (from the bridge's projects.json) for «попроси Клода …».
+ */
+claude_project: string, };

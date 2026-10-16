@@ -26,6 +26,8 @@ pub struct Prefs {
     pub voice_pack: String,
     /// Helpdesk digest schedule.
     pub digest: Digest,
+    /// Project name (from the bridge's projects.json) for «попроси Клода …».
+    pub claude_project: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
@@ -66,6 +68,7 @@ impl Default for Prefs {
             wake_required: true,
             voice_pack: "Jarvis".into(),
             digest: Digest::default(),
+            claude_project: "hermes-assistant".into(),
         }
     }
 }
@@ -142,6 +145,7 @@ mod tests {
                 speak: true,
                 telegram: false,
             },
+            claude_project: "hermes-assistant".into(),
         };
         let saved = save(&layout, &p).unwrap();
         assert_eq!(saved.voice_volume, 1.0);

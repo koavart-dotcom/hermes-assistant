@@ -93,6 +93,7 @@ impl Supervisor {
         let mut ex = Executor::new(self.ctx.layout.clone(), voice);
         ex.volume = prefs.voice_volume;
         ex.silent = prefs.silent;
+        ex.claude_project = prefs.claude_project.clone();
         // Remember what was searched so "включи первое видео" can follow.
         if let Some(q) = query {
             if cmd.id.starts_with("web.")

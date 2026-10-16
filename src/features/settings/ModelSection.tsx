@@ -4,6 +4,7 @@ import { Brain, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api, isTauri, onSetupEvent } from "@/services/tauri";
+import { useVoiceStore } from "@/stores/voice";
 import type { ModelOption } from "@/types/generated/ModelOption";
 
 function errorText(e: unknown): string {
@@ -126,11 +127,40 @@ export function ModelSection() {
         </div>
         {pullLog ? <p className="mt-2 font-mono text-xs text-muted-foreground">{pullLog}</p> : null}
       </div>
+      <ClaudeBridgeField />
       {error ? (
         <p className="text-destructive" role="alert">
           {error}
         </p>
       ) : null}
     </section>
+  );
+}
+
+/** «Попроси Клода …»: which project of the Hermes → Claude Code bridge gets the task. */
+function ClaudeBridgeField() {
+  const qc = useQueryClient();
+  const prefs = useQuery({ queryKey: ["prefs"], queryFn: api.prefsGet, enabled: isTauri() });
+  const [typed, setTyped] = useState<string | null>(null);
+  const value = typed ?? prefs.data?.claude_project ?? "";
+  const save = useMutation({
+    mutationFn: () => api.prefsSet({ ...prefs.data!, claude_project: value.trim() || "hermes-assistant" }),
+    onSuccess: (p) => {
+      setTyped(null);
+      useVoiceStore.getState().setPrefs(p);
+      void qc.invalidateQueries({ queryKey: ["prefs"] });
+    },
+  });
+  return (
+    <div className="rounded-lg border border-border/70 bg-background/40 p-3">
+      <p className="font-medium">Мост к Claude Code</p>
+      <p className="mb-2 text-xs text-muted-foreground">«Джарвис, попроси Клода …» передаёт задачу Claude Code под вашей подпиской через мост Hermes. Проект из списка моста (projects.json).</p>
+      <div className="flex gap-2">
+        <Input className="font-mono" aria-label="Проект для Клода" value={value} onChange={(e) => setTyped(e.target.value)} placeholder="hermes-assistant" />
+        <Button variant="outline" onClick={() => save.mutate()} disabled={!prefs.data || typed === null || save.isPending}>
+          Сохранить
+        </Button>
+      </div>
+    </div>
   );
 }
