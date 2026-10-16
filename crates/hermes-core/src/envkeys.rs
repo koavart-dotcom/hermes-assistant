@@ -36,12 +36,42 @@ pub fn presets() -> Vec<EnvPreset> {
         hint: hint.into(),
     };
     vec![
-        p("freescout", "FreeScout (хелпдеск Deka)", &["FREESCOUT_URL", "FREESCOUT_API_KEY", "FREESCOUT_MY_USER_ID"], "Адрес вида https://helpdesk.example.com, ключ API из настроек FreeScout и ваш id пользователя (для фильтра «мои тикеты»)."),
-        p("telegram", "Telegram-бот", &["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"], "Токен от @BotFather и список разрешённых user id через запятую — канал Telegram в Hermes."),
-        p("anthropic", "Anthropic (Claude API)", &["ANTHROPIC_API_KEY"], "Облачная модель по явному выбору; платно."),
-        p("openai", "OpenAI", &["OPENAI_API_KEY"], "Облачные модели и голос OpenAI; платно."),
-        p("gemini", "Google Gemini", &["GEMINI_API_KEY"], "Модели Google."),
-        p("github", "GitHub", &["GITHUB_TOKEN"], "Токен для инструментов GitHub (репозитории, issues)."),
+        p(
+            "freescout",
+            "FreeScout (хелпдеск Deka)",
+            &["FREESCOUT_URL", "FREESCOUT_API_KEY", "FREESCOUT_MY_USER_ID"],
+            "Адрес вида https://helpdesk.example.com, ключ API из настроек FreeScout и ваш id пользователя (для фильтра «мои тикеты»).",
+        ),
+        p(
+            "telegram",
+            "Telegram-бот",
+            &["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"],
+            "Токен от @BotFather и список разрешённых user id через запятую — канал Telegram в Hermes.",
+        ),
+        p(
+            "anthropic",
+            "Anthropic (Claude API)",
+            &["ANTHROPIC_API_KEY"],
+            "Облачная модель по явному выбору; платно.",
+        ),
+        p(
+            "openai",
+            "OpenAI",
+            &["OPENAI_API_KEY"],
+            "Облачные модели и голос OpenAI; платно.",
+        ),
+        p(
+            "gemini",
+            "Google Gemini",
+            &["GEMINI_API_KEY"],
+            "Модели Google.",
+        ),
+        p(
+            "github",
+            "GitHub",
+            &["GITHUB_TOKEN"],
+            "Токен для инструментов GitHub (репозитории, issues).",
+        ),
     ]
 }
 
@@ -49,7 +79,8 @@ pub fn valid_name(name: &str) -> bool {
     let b = name.as_bytes();
     (2..=64).contains(&b.len())
         && b[0].is_ascii_uppercase()
-        && b.iter().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == b'_')
+        && b.iter()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == b'_')
 }
 
 pub fn mask(value: &str) -> String {
@@ -57,7 +88,14 @@ pub fn mask(value: &str) -> String {
     if v.is_empty() {
         return String::new();
     }
-    let tail: String = v.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
+    let tail: String = v
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     format!("••••{tail}")
 }
 
@@ -122,7 +160,9 @@ pub fn upsert(text: &str, name: &str, value: Option<&str>) -> String {
 }
 
 fn quote(v: &str) -> String {
-    if v.chars().any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'') {
+    if v.chars()
+        .any(|c| c.is_whitespace() || c == '#' || c == '"' || c == '\'')
+    {
         format!("\"{}\"", v.replace('"', "\\\""))
     } else {
         v.to_string()
@@ -150,7 +190,9 @@ pub fn list(layout: &Layout) -> Result<Vec<EnvKey>> {
 
 pub fn set(layout: &Layout, name: &str, value: &str) -> Result<()> {
     if !valid_name(name) {
-        return Err(CoreError::Other(format!("invalid key name `{name}` (A-Z, 0-9, _)")));
+        return Err(CoreError::Other(format!(
+            "invalid key name `{name}` (A-Z, 0-9, _)"
+        )));
     }
     if value.contains('\n') {
         return Err(CoreError::Other("value must be one line".into()));
@@ -178,7 +220,10 @@ mod tests {
         let text = "# comment\nAPI_SERVER_KEY=abcd1234\nexport FREESCOUT_URL=\"https://h.example.com\"\nbad-name=1\n\nEMPTY=\n";
         let kv = parse(text);
         assert_eq!(kv.len(), 3);
-        assert_eq!(kv[1], ("FREESCOUT_URL".into(), "https://h.example.com".into()));
+        assert_eq!(
+            kv[1],
+            ("FREESCOUT_URL".into(), "https://h.example.com".into())
+        );
         assert_eq!(mask("abcd1234"), "••••1234");
         assert_eq!(mask("ab"), "••••ab");
         assert_eq!(mask(""), "");

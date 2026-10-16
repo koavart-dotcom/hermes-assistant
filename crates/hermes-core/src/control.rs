@@ -90,7 +90,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/hermes/config", get(config_get).put(config_put))
         .route("/hermes/env", get(env_get))
         .route("/hermes/env/keys", get(env_keys_list).put(env_keys_set))
-        .route("/hermes/env/keys/{name}", axum::routing::delete(env_keys_remove))
+        .route(
+            "/hermes/env/keys/{name}",
+            axum::routing::delete(env_keys_remove),
+        )
         .route("/hermes/env/presets", get(env_keys_presets))
         .route("/gateway/restart", post(gateway_restart))
         .route("/logs", get(logs))
@@ -305,7 +308,9 @@ async fn gateway_restart(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> 
 
 // ------------------------------------------------------- API keys (.env) --
 
-async fn env_keys_list(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Vec<crate::envkeys::EnvKey>>> {
+async fn env_keys_list(
+    State(ctl): State<Arc<Ctl>>,
+) -> ApiResult<Json<Vec<crate::envkeys::EnvKey>>> {
     Ok(Json(crate::envkeys::list(&ctl.sup.ctx.layout)?))
 }
 
@@ -328,7 +333,9 @@ async fn env_keys_set(
         return Err(bad_request("name must be UPPER_SNAKE_CASE"));
     }
     crate::envkeys::set(&ctl.sup.ctx.layout, &body.name, &body.value)?;
-    Ok(Json(json!({ "ok": true, "name": body.name, "masked": crate::envkeys::mask(&body.value), "restart_required": true })))
+    Ok(Json(
+        json!({ "ok": true, "name": body.name, "masked": crate::envkeys::mask(&body.value), "restart_required": true }),
+    ))
 }
 
 async fn env_keys_remove(
@@ -339,7 +346,9 @@ async fn env_keys_remove(
         return Err(bad_request("name must be UPPER_SNAKE_CASE"));
     }
     crate::envkeys::remove(&ctl.sup.ctx.layout, &name)?;
-    Ok(Json(json!({ "ok": true, "name": name, "restart_required": true })))
+    Ok(Json(
+        json!({ "ok": true, "name": name, "restart_required": true }),
+    ))
 }
 
 fn default_timeout() -> u64 {
