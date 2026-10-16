@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { routes } from "@/app/routes";
+import { UpdateBanner } from "@/app/UpdateBanner";
 import { useUiStore } from "@/stores/ui";
 
 export function Layout() {
@@ -48,8 +49,11 @@ export function Layout() {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-auto">
-        <Outlet />
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <UpdateBanner />
+        <div className="min-h-0 flex-1 overflow-auto">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

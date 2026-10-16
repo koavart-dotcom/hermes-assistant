@@ -50,6 +50,13 @@
   (once/session/always/deny), `/stop`, Sessions API, `/v1/capabilities`. Голос: захват микрофона в
   оболочке, транскрипция и озвучка через эндпоинты Hermes (`/api/audio/transcribe`,
   `/api/audio/voice-config`, speech WebSocket — пути проверить по коду перед реализацией).
+- **Автообновление (16.10, Артем: «чтоб я каждый раз не переустанавливал»).** tauri-plugin-updater
+  (Rust API, без npm-плагина; `default-features = false`, т.к. `zip ^4` снят с crates.io): endpoint
+  `releases/latest/download/latest.json`, подпись ключом из `private/updater.key` (секрет GitHub
+  `TAURI_SIGNING_PRIVATE_KEY`, без пароля), `release.yml` публикует релиз сразу с `latest.json`.
+  Репозиторий приватный → обновлятор шлёт `Authorization: Bearer <GitHub token>` из keyring
+  (`PUT /update/token` в Control API). Баннер в окне (`src/app/UpdateBanner.tsx`) проверяет при
+  запуске и раз в 6 ч. Версии ставить только через тег: `tauri.conf.json`, `package.json`, `Cargo.toml`.
 - **Control API (16.10, Артем: «чтоб ты сам мог заходить и настраивать»).** В приложении HTTP-API на
   `127.0.0.1:8643` с Bearer-токеном (`%LOCALAPPDATA%\ua.koavart.hermes\control.token`): статус, запуск
   мастера, события, gateway, `hermes` CLI, `config.yaml`/`.env`, журнал. С сервера — `tools/hermesctl.sh`

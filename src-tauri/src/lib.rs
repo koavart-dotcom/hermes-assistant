@@ -4,6 +4,7 @@
 
 pub mod commands;
 pub mod state;
+pub mod update;
 
 use hermes_core::control::{self, ControlConfig};
 use tauri::{Emitter, Manager};
@@ -17,6 +18,8 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let state = state::AppState::init(app.handle())?;
             let sup = state.supervisor.clone();
@@ -96,6 +99,8 @@ pub fn run() {
             commands::chat_send,
             commands::chat_stop,
             commands::chat_approve,
+            update::update_check,
+            update::update_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

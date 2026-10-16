@@ -2,13 +2,24 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Hermes Assistant",
   "mainBinaryName": "hermes-assistant",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "identifier": "ua.koavart.hermes",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDNjcyRDRFQUJCNjkyM0IKUldRN2tyYXJUaTFudkUyV09CbzdTQ09zZWczMVBJNlpxYXNZSWkzZTJ6WmpQOHg5aDZSNXlVYisK",
+      "endpoints": [
+        "https://github.com/koavart-dotcom/hermes-assistant/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   },
   "app": {
     "windows": [
@@ -28,6 +39,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": [
       "nsis",
       "msi",

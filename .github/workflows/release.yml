@@ -29,10 +29,17 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signature (tauri signer generate); the app verifies it with
+          # plugins.updater.pubkey in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Hermes ${{ github.ref_name }}"
-          releaseBody: "Сборка из тега ${{ github.ref_name }}. Установщик Windows: .exe (NSIS) или .msi."
-          releaseDraft: true
-          prerelease: true
+          releaseName: "Hermes Assistant ${{ github.ref_name }}"
+          releaseBody: "Сборка из тега ${{ github.ref_name }}. Установщик Windows: .exe (NSIS) или .msi; установленное приложение обновится само."
+          # Published right away: the in-app updater reads latest.json from the
+          # latest release (drafts are invisible to it).
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

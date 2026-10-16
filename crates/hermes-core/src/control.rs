@@ -103,6 +103,7 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/chat/stop", post(chat_stop))
         .route("/chat/approve", post(chat_approve))
         .route("/chat/events", get(chat_events))
+        .route("/update/token", axum::routing::put(update_token))
         .layer(middleware::from_fn_with_state(ctl.clone(), auth));
     let api = Router::new().route("/health", get(health)).merge(protected);
     Router::new().nest(BASE_PATH, api).with_state(ctl)
@@ -506,6 +507,23 @@ async fn chat_approve(
         .await
         .map_err(|e| bad_request(e.to_string()))?;
     Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct TokenRequest {
+    /// Read-only GitHub token for the private releases; empty clears it.
+    token: String,
+}
+
+/// Store the token the in-app updater uses (keyring, file fallback).
+async fn update_token(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<TokenRequest>,
+) -> ApiResult<Json<Value>> {
+    crate::secrets::set_github_token(&ctl.sup.ctx.layout, &req.token)?;
+    Ok(Json(
+        json!({ "ok": true, "configured": !req.token.trim().is_empty() }),
+    ))
 }
 
 #[derive(Serialize)]

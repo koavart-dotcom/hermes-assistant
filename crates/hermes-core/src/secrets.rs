@@ -70,6 +70,48 @@ fn file_only(path: &Path) -> Result<String> {
     Ok(key)
 }
 
+const GITHUB_TOKEN_USER: &str = "github_token";
+
+fn github_token_path(layout: &Layout) -> std::path::PathBuf {
+    layout.app_data_dir.join("secrets").join("github_token")
+}
+
+/// Read-only GitHub token the in-app updater sends to download `latest.json`
+/// and the installer from the private releases. `None` when not configured.
+pub fn github_token(layout: &Layout) -> Option<String> {
+    if let Ok(entry) = keyring::Entry::new(SERVICE, GITHUB_TOKEN_USER) {
+        if let Ok(t) = entry.get_password() {
+            if !t.trim().is_empty() {
+                return Some(t.trim().to_string());
+            }
+        }
+    }
+    read_fallback(&github_token_path(layout))
+}
+
+/// Store (or clear with an empty string) the updater's GitHub token.
+pub fn set_github_token(layout: &Layout, token: &str) -> Result<()> {
+    let token = token.trim();
+    let path = github_token_path(layout);
+    if token.is_empty() {
+        if let Ok(entry) = keyring::Entry::new(SERVICE, GITHUB_TOKEN_USER) {
+            let _ = entry.delete_credential();
+        }
+        let _ = std::fs::remove_file(&path);
+        return Ok(());
+    }
+    match keyring::Entry::new(SERVICE, GITHUB_TOKEN_USER).and_then(|e| e.set_password(token)) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&path);
+            Ok(())
+        }
+        Err(e) => {
+            tracing::warn!("keyring unavailable for github token ({e}); using file fallback");
+            write_fallback(&path, token)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

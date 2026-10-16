@@ -44,6 +44,11 @@ Agent на ПК Артема, не трогая окно приложения. �
 | POST | `/chat/stop` | `{session_id}` — остановить ход |
 | POST | `/chat/approve` | `{run_id, choice}` — `once` / `session` / `always` / `deny` |
 
+**Обновления (с v0.5.1):** `PUT /update/token` `{token}` — read-only токен GitHub (fine-grained, Contents: read
+на `hermes-assistant`) для встроенного обновлятора, пока репозиторий приватный; пустая строка удаляет.
+Хранится в Credential Manager (фолбэк — файл `secrets/github_token`). Сама проверка и установка
+обновления — в окне (баннер «Доступна версия …» → «Обновить»), Tauri-команды `update_check`/`update_install`.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

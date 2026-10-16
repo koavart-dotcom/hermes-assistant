@@ -8,6 +8,7 @@ import type { SetupEvent } from "@/types/generated/SetupEvent";
 import type { SetupOptions } from "@/types/generated/SetupOptions";
 import type { SetupPlan } from "@/types/generated/SetupPlan";
 import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
+import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 
 export type ApprovalChoice = "once" | "session" | "always" | "deny";
 
@@ -28,7 +29,21 @@ export const api = {
   chatSend: (sessionId: string, message: string) => invoke<void>("chat_send", { sessionId, message }),
   chatStop: (sessionId: string) => invoke<void>("chat_stop", { sessionId }),
   chatApprove: (runId: string, choice: ApprovalChoice) => invoke<void>("chat_approve", { runId, choice }),
+
+  updateCheck: () => invoke<UpdateInfo>("update_check"),
+  updateInstall: () => invoke<void>("update_install"),
 };
+
+export const UPDATE_EVENT = "update:progress";
+
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+export function onUpdateProgress(handler: (p: UpdateProgress) => void): Promise<UnlistenFn> {
+  return listen<UpdateProgress>(UPDATE_EVENT, (e) => handler(e.payload));
+}
 
 export const SETUP_EVENT = "setup:event";
 export const CHAT_EVENT = "chat:event";

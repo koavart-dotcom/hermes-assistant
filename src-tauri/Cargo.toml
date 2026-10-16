@@ -18,6 +18,10 @@ hermes-core = { path = "../crates/hermes-core" }
 tauri = { version = "2.12", features = [] }
 tauri-plugin-log = "2.10"
 tauri-plugin-store = "2.5"
+# No `zip` feature: every 2.x line of the plugin depends on zip ^4, which is
+# fully yanked on crates.io; NSIS updates are plain .exe + .sig and need no zip.
+tauri-plugin-updater = { version = "2.14", default-features = false, features = ["rustls-tls", "system-proxy"] }
+tauri-plugin-process = "2.4"
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
