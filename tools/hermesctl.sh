@@ -9,6 +9,7 @@
 #   tools/hermesctl.sh cancel | gateway-start | gateway-stop
 #   tools/hermesctl.sh cli config get model.default      # any `hermes ...` command
 #   tools/hermesctl.sh config-get | config-put <file> | env
+#   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
 #   tools/hermesctl.sh raw GET /status                   # any endpoint
 #
 # Env: HERMES_PC (ssh host, default main-pc), HERMES_PC_USER_PROFILE
@@ -78,6 +79,12 @@ case "${cmd}" in
   config-get)    call GET /hermes/config ;;
   config-put)    call PUT /hermes/config "@${1:?file}" text/plain ;;
   env)           call GET /hermes/env ;;
+  keys)          call GET /hermes/env/keys ;;
+  keys-presets)  call GET /hermes/env/presets ;;
+  key-set)       n="${1:?NAME}"; shift; body="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps({"name": sys.argv[1], "value": sys.stdin.read()}))' "$n")"
+                 call PUT /hermes/env/keys "$body" ;;
+  key-del)       call DELETE "/hermes/env/keys/${1:?NAME}" ;;
+  gateway-restart) call POST /gateway/restart ;;
   chat-sessions) call GET /chat/sessions ;;
   chat-new)      body="$(printf '%s' "${1:-}" | python3 -c 'import json,sys; t=sys.stdin.read(); print(json.dumps({"title": t or None}))')"
                  call POST /chat/sessions "${body}" ;;

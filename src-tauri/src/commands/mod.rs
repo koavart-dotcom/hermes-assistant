@@ -3,6 +3,7 @@
 //! work lives in `hermes_core::supervisor`, which the control API shares.
 
 use hermes_core::chat::{ChatMessage, SessionSummary};
+use hermes_core::envkeys::{EnvKey, EnvPreset};
 use hermes_core::gateway::Gateway;
 use hermes_core::quick::{QuickCommandInfo, QuickMatch};
 use hermes_core::setup::{SetupOptions, SetupPlan};
@@ -294,6 +295,33 @@ pub fn permissions_policy_set(
     let path = hermes_core::plugins::policy_path(&state.supervisor.ctx.layout);
     let text = serde_json::to_string_pretty(&policy).map_err(err)?;
     hermes_core::control::write_with_backup(&path, &text).map_err(err)
+}
+
+// ------------------------------------------------------- API keys (.env) --
+
+#[tauri::command]
+pub fn env_keys_list(state: State<'_, AppState>) -> Result<Vec<EnvKey>, String> {
+    hermes_core::envkeys::list(&state.supervisor.ctx.layout).map_err(err)
+}
+
+#[tauri::command]
+pub fn env_keys_presets() -> Vec<EnvPreset> {
+    hermes_core::envkeys::presets()
+}
+
+#[tauri::command]
+pub fn env_keys_set(state: State<'_, AppState>, name: String, value: String) -> Result<(), String> {
+    hermes_core::envkeys::set(&state.supervisor.ctx.layout, &name, &value).map_err(err)
+}
+
+#[tauri::command]
+pub fn env_keys_remove(state: State<'_, AppState>, name: String) -> Result<(), String> {
+    hermes_core::envkeys::remove(&state.supervisor.ctx.layout, &name).map_err(err)
+}
+
+#[tauri::command]
+pub async fn gateway_restart(state: State<'_, AppState>) -> Result<(), String> {
+    state.supervisor.gateway_restart().await.map_err(err)
 }
 
 #[cfg(test)]

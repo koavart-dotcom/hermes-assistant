@@ -174,6 +174,12 @@ v0.5.3: репозиторий публичный, **обновление по �
 delegation/connections/skills/tts (`hermes tools disable <ts> --platform api_server`), промпт ~14k токенов →
 меньше; `hermes prompt-size` меряет CLI, не api_server. Открыто: голос Джарвиса для произвольного текста
 (XTTS v2 как `tts.provider: command`), глобальная горячая клавиша, Deka-сценарии (этап 7).
+**v0.8.4** — «открой <программу>» фокусирует уже открытое окно. **v0.9.0** — три режима голоса (чат /
+по кнопке / всегда слушает с wake word «Джарвис»/«Гермес», VAD в `src/lib/vad.ts`, `VoiceRuntime` в Layout).
+**v0.9.1** — «Настройки» → «Интеграции и ключи»: ключи сервисов (FreeScout, Telegram, облачные провайдеры,
+свои переменные) пишутся в `.env` Hermes через `hermes-core::envkeys`, маскируются, после изменения —
+«Перезапустить Hermes»; Control API `/hermes/env/keys`, `/gateway/restart`. MCP-мост Hermes → Claude Code
+(`tools/mcp-claude-bridge`, сервис `claude-bridge` на 8650, подписка Pro) настроен, сквозной тест не сделан.
 Открыто: слово-активации по-русски (openWakeWord требует свою `.tflite`; Porcupine имеет встроенное
 «jarvis»; sherpa — открытый словарь), точные пути голосовых эндпоинтов api_server, формат пакета
 (NSIS vs MSI) и размер первого скачивания.

@@ -261,6 +261,14 @@ impl Supervisor {
             .await
     }
 
+    /// Stop then start the gateway (picks up `.env` / config changes).
+    pub async fn gateway_restart(&self) -> Result<()> {
+        if let Err(e) = self.gateway_stop().await {
+            log::warn!("gateway stop before restart: {e}");
+        }
+        self.gateway_start().await
+    }
+
     /// Run `hermes <args>` and return its output even when it exits non-zero
     /// (the caller decides what a failure means).
     pub async fn hermes_cli(&self, args: &[String], timeout: Duration) -> Result<Output> {

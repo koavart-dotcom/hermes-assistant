@@ -60,6 +60,14 @@ Hermes на 127.0.0.1:8644; прогресс — в `/setup/events`); `POST /voi
 (`{roots: [...], tools: {name: allow|confirm|block|roots|terminal}, default, terminal: {block: [regex], allow: [cmd],
 default}}`); плагин читает файл при каждом вызове инструмента, перезапуск не нужен.
 
+**Ключи и интеграции (с v0.9.1):** `GET /hermes/env/keys` — список переменных из `.env` Hermes как
+`[{name, masked}]` (значения не возвращаются, только `••••` + последние 4 символа); `GET /hermes/env/presets` —
+известные интеграции для экрана «Настройки» (FreeScout, Telegram, Anthropic, OpenAI, Gemini, GitHub: id, заголовок,
+имена переменных, подсказка); `PUT /hermes/env/keys` `{name, value}` — записать `NAME=value` (имя — только
+`A-Z0-9_`, значение в одну строку; файл переписывается с резервной копией `.bak`); `DELETE /hermes/env/keys/{name}`.
+`.env` gateway читает при старте, поэтому после изменений нужен `POST /gateway/restart` (стоп + старт).
+Сами значения ключей в логах и ответах API не появляются.
+
 Ошибки — JSON `{error}` с кодами 400/401/404/409/500.
 
 ## Использование с сервера

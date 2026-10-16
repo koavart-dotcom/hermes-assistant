@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { AppInfo } from "@/types/generated/AppInfo";
+import type { EnvKey } from "@/types/generated/EnvKey";
+import type { EnvPreset } from "@/types/generated/EnvPreset";
 import type { ChatEnvelope } from "@/types/generated/ChatEnvelope";
 import type { ChatMessage } from "@/types/generated/ChatMessage";
 import type { SessionSummary } from "@/types/generated/SessionSummary";
@@ -27,12 +29,15 @@ export const api = {
   gatewayStop: () => invoke<void>("gateway_stop"),
 
   chatSessions: () => invoke<SessionSummary[]>("chat_sessions"),
-  chatCreateSession: (title?: string) => invoke<SessionSummary>("chat_create_session", { title: title ?? null }),
+  chatCreateSession: (title?: string) =>
+    invoke<SessionSummary>("chat_create_session", { title: title ?? null }),
   chatDeleteSession: (sessionId: string) => invoke<void>("chat_delete_session", { sessionId }),
   chatMessages: (sessionId: string) => invoke<ChatMessage[]>("chat_messages", { sessionId }),
-  chatSend: (sessionId: string, message: string) => invoke<void>("chat_send", { sessionId, message }),
+  chatSend: (sessionId: string, message: string) =>
+    invoke<void>("chat_send", { sessionId, message }),
   chatStop: (sessionId: string) => invoke<void>("chat_stop", { sessionId }),
-  chatApprove: (runId: string, choice: ApprovalChoice) => invoke<void>("chat_approve", { runId, choice }),
+  chatApprove: (runId: string, choice: ApprovalChoice) =>
+    invoke<void>("chat_approve", { runId, choice }),
 
   updateCheck: () => invoke<UpdateInfo>("update_check"),
   updateInstall: () => invoke<void>("update_install"),
@@ -45,13 +50,21 @@ export const api = {
 
   quickCommands: () => invoke<QuickCommandInfo[]>("quick_commands"),
   quickMatch: (text: string) => invoke<QuickMatch | null>("quick_match", { text }),
-  quickRun: (id: string, confirmed = false) => invoke<QuickRunResult>("quick_run", { id, confirmed }),
+  quickRun: (id: string, confirmed = false) =>
+    invoke<QuickRunResult>("quick_run", { id, confirmed }),
   quickImportVoices: (sourceDir: string, name?: string) =>
     invoke<number>("quick_import_voices", { sourceDir, name: name ?? null }),
 
   permissionsLog: (tail = 200) => invoke<PermissionRecord[]>("permissions_log", { tail }),
   permissionsPolicyGet: () => invoke<Record<string, unknown>>("permissions_policy_get"),
-  permissionsPolicySet: (policy: Record<string, unknown>) => invoke<void>("permissions_policy_set", { policy }),
+  permissionsPolicySet: (policy: Record<string, unknown>) =>
+    invoke<void>("permissions_policy_set", { policy }),
+
+  envKeysList: () => invoke<EnvKey[]>("env_keys_list"),
+  envKeysPresets: () => invoke<EnvPreset[]>("env_keys_presets"),
+  envKeysSet: (name: string, value: string) => invoke<void>("env_keys_set", { name, value }),
+  envKeysRemove: (name: string) => invoke<void>("env_keys_remove", { name }),
+  gatewayRestart: () => invoke<void>("gateway_restart"),
 };
 
 /** One decision line of the hermes_permissions plugin (hermes_permissions.log). */

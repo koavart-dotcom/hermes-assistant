@@ -89,6 +89,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/hermes/cli", post(hermes_cli))
         .route("/hermes/config", get(config_get).put(config_put))
         .route("/hermes/env", get(env_get))
+        .route("/hermes/env/keys", get(env_keys_list).put(env_keys_set))
+        .route("/hermes/env/keys/{name}", axum::routing::delete(env_keys_remove))
+        .route("/hermes/env/presets", get(env_keys_presets))
+        .route("/gateway/restart", post(gateway_restart))
         .route("/logs", get(logs))
         .route(
             "/chat/sessions",
@@ -291,6 +295,51 @@ async fn gateway_start(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
 async fn gateway_stop(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
     ctl.sup.gateway_stop().await?;
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Stop + start: needed after `.env` changes (the gateway reads it at start).
+async fn gateway_restart(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
+    ctl.sup.gateway_restart().await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+// ------------------------------------------------------- API keys (.env) --
+
+async fn env_keys_list(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Vec<crate::envkeys::EnvKey>>> {
+    Ok(Json(crate::envkeys::list(&ctl.sup.ctx.layout)?))
+}
+
+async fn env_keys_presets() -> Json<Vec<crate::envkeys::EnvPreset>> {
+    Json(crate::envkeys::presets())
+}
+
+#[derive(Deserialize)]
+struct EnvKeySet {
+    name: String,
+    value: String,
+}
+
+/// Write one `NAME=value` into Hermes' `.env` (value never echoed back).
+async fn env_keys_set(
+    State(ctl): State<Arc<Ctl>>,
+    Json(body): Json<EnvKeySet>,
+) -> ApiResult<Json<Value>> {
+    if !crate::envkeys::valid_name(&body.name) {
+        return Err(bad_request("name must be UPPER_SNAKE_CASE"));
+    }
+    crate::envkeys::set(&ctl.sup.ctx.layout, &body.name, &body.value)?;
+    Ok(Json(json!({ "ok": true, "name": body.name, "masked": crate::envkeys::mask(&body.value), "restart_required": true })))
+}
+
+async fn env_keys_remove(
+    State(ctl): State<Arc<Ctl>>,
+    axum::extract::Path(name): axum::extract::Path<String>,
+) -> ApiResult<Json<Value>> {
+    if !crate::envkeys::valid_name(&name) {
+        return Err(bad_request("name must be UPPER_SNAKE_CASE"));
+    }
+    crate::envkeys::remove(&ctl.sup.ctx.layout, &name)?;
+    Ok(Json(json!({ "ok": true, "name": name, "restart_required": true })))
 }
 
 fn default_timeout() -> u64 {

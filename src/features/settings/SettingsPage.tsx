@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw } from "lucide-react";
 import { PageShell } from "@/app/PageShell";
 import { Button } from "@/components/ui/button";
+import { EnvKeysSection } from "@/features/settings/EnvKeysSection";
 import { api, isTauri } from "@/services/tauri";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 
@@ -41,20 +42,29 @@ export function SettingsPage() {
   };
 
   return (
-    <PageShell title="Настройки" description="Обновления и автозапуск. Модели, провайдеры и горячие клавиши появятся позже.">
+    <PageShell
+      title="Настройки"
+      description="Обновления, автозапуск, ключи доступа к сервисам. Модели и горячие клавиши появятся позже."
+    >
       <section className="max-w-xl space-y-3 text-sm">
         <h2 className="font-semibold">Обновления</h2>
         <p>
           Версия приложения:{" "}
-          <span data-testid="settings-version">{info.data ? info.data.version : isTauri() ? "…" : "браузерный режим"}</span>
+          <span data-testid="settings-version">
+            {info.data ? info.data.version : isTauri() ? "…" : "браузерный режим"}
+          </span>
         </p>
         <p className="text-muted-foreground">
-          Приложение проверяет новые версии при запуске и раз в 6 часов. Обновление скачивается с GitHub, проверяется по
-          подписи, устанавливается и перезапускает приложение.
+          Приложение проверяет новые версии при запуске и раз в 6 часов. Обновление скачивается с
+          GitHub, проверяется по подписи, устанавливается и перезапускает приложение.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={check} disabled={!isTauri() || checking || installing}>
-            {checking ? <Loader2 className="mr-1 size-4 animate-spin" /> : <RefreshCw className="mr-1 size-4" />}
+            {checking ? (
+              <Loader2 className="mr-1 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 size-4" />
+            )}
             Проверить обновления
           </Button>
           {result?.available ? (
@@ -64,7 +74,9 @@ export function SettingsPage() {
             </Button>
           ) : null}
         </div>
-        {result && !result.available ? <p className="text-muted-foreground">У вас последняя версия ({result.current}).</p> : null}
+        {result && !result.available ? (
+          <p className="text-muted-foreground">У вас последняя версия ({result.current}).</p>
+        ) : null}
         {result?.available && result.notes ? (
           <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{result.notes}</pre>
         ) : null}
@@ -78,10 +90,13 @@ export function SettingsPage() {
       <section className="mt-8 max-w-xl space-y-2 text-sm">
         <h2 className="font-semibold">Автозапуск</h2>
         <p className="text-muted-foreground">
-          Приложение регистрирует себя в автозагрузке Windows при каждом запуске (ключ реестра Run текущего
-          пользователя), поэтому после перезагрузки Ollama и помощник поднимаются сами. Отключение появится позже.
+          Приложение регистрирует себя в автозагрузке Windows при каждом запуске (ключ реестра Run
+          текущего пользователя), поэтому после перезагрузки Ollama и помощник поднимаются сами.
+          Отключение появится позже.
         </p>
       </section>
+
+      <EnvKeysSection />
     </PageShell>
   );
 }

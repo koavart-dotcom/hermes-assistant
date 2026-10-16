@@ -202,3 +202,40 @@ piper`, `tts.provider piper`, `tts.piper.voice ru_RU-dmitri-medium`, голос 
 офлайн). Круг «Piper → Whisper small» через API занял 6 с, текст распознан верно. После `hermes pm install`
 уже запущенный веб-сервер не видит новые пакеты (PM создаёт новое поколение venv) — добавлен
 `POST /voice/restart` (`VoiceServer::stop_owned` + start), и `install_deps` ставит `voice` и `piper` сразу.
+
+## 2026-10-16 — MCP-мост Hermes → Claude Code (подписка вместо API-ключа)
+
+**Контекст.** Артем: «что если создать API на сам VS Code на этой машине, чтоб ты отсюда мог тоже быть
+руками Гермеса… суть — не использовать дорогой API, а мою подписку Pro».
+
+**Решение.** На сервере разработки работает `tools/mcp-claude-bridge/server.py` (stdlib, HTTP-MCP на
+`127.0.0.1:8650`, Bearer-токен `bridge.token`, systemd --user `claude-bridge`): инструменты
+`claude_task(project, task)`, `claude_projects`, `claude_status` запускают `claude -p --output-format json
+--permission-mode acceptEdits` в папке проекта из `projects.json` (одна задача за раз, таймаут 25/60 мин,
+журнал `bridge.log`). В Hermes на ПК он подключён как `mcp_servers.claude` (URL по LAN, заголовок
+Authorization, timeout 1800) и включён для `api_server`. Claude работает под подпиской Pro, ключ API не нужен.
+
+**Последствия.** Hermes получает «руки» в коде проектов, но только в тех, что перечислены в `projects.json`;
+доступ ограничен токеном и LAN. Фильтр auto-режима Claude Code не даёт мне самому включать такие
+инструменты и запускать сетевые сервисы — сервис и настройку Hermes выполнял Артем. Сквозной тест
+(задача из чата Hermes → `bridge.log`) ещё не сделан.
+
+## 2026-10-16 — Ключи сервисов: в `.env` Hermes через экран «Настройки» (v0.9.1)
+
+**Контекст.** Артем: «в меню настроек должна быть возможность подкидывать API-ключи, чтобы давать
+доступы к таким сервисам, как хелпдеск». Skills и инструменты Hermes (FreeScout, Telegram, облачные
+провайдеры) читают ключи из переменных окружения, источник которых — `$HERMES_HOME/.env`.
+
+**Решение.** Раздел «Интеграции и ключи» на экране «Настройки»: пресеты (FreeScout: URL, API-ключ,
+id пользователя; Telegram: токен и список пользователей; Anthropic, OpenAI, Gemini, GitHub) и произвольные
+переменные `UPPER_SNAKE`. Значения пишутся прямо в `.env` Hermes (`hermes-core::envkeys`, замена строки
+по имени, остальное сохраняется, резервная копия `.bak`), а не через `hermes config set`, чтобы ключ не
+проходил через командную строку и журнал. Обратно значения не читаются — только `••••` + последние 4
+символа. После изменения UI предлагает «Перезапустить Hermes» (gateway читает `.env` при старте).
+Control API: `GET/PUT /hermes/env/keys`, `DELETE /hermes/env/keys/{name}`, `GET /hermes/env/presets`,
+`POST /gateway/restart`; `hermesctl keys | key-set | key-del | gateway-restart`.
+
+**Отклонено.** Windows Credential Manager как основное хранилище ключей сервисов: Hermes и его skills не
+умеют читать оттуда, пришлось бы прокидывать значения в окружение при каждом старте gateway. Credential
+Manager остаётся для наших собственных секретов (`API_SERVER_KEY`). Файл `.env` защищён правами
+пользователя Windows; защищённые пути плагина `hermes_permissions` запрещают модели писать в `.env`.
