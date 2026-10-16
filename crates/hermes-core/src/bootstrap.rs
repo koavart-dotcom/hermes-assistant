@@ -13,10 +13,22 @@ use crate::events::{EventSender, SetupEvent, emit};
 use crate::{CoreError, Layout, Result};
 
 /// Pinned Hermes revision shipped with the app (`resources/hermes/pin.json`).
+///
+/// `branch` matters: install.ps1 checks `merge-base --is-ancestor <commit>
+/// origin/<branch>` and fails with `commit_not_on_branch` otherwise. Hermes
+/// cuts releases on `release/<version>` branches that are *not* merged into
+/// `main` (v0.22.2 = `release/0.22.2`), so the default `main` is wrong for
+/// release commits.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Pin {
     pub version: String,
     pub commit: String,
+    #[serde(default = "default_branch")]
+    pub branch: String,
+}
+
+fn default_branch() -> String {
+    "main".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -148,6 +160,8 @@ impl Installer {
                 &stage.name,
                 "-NonInteractive",
                 "-Json",
+                "-Branch",
+                &self.pin.branch,
                 "-Commit",
                 &self.pin.commit,
             ]);
@@ -201,6 +215,20 @@ mod tests {
         let m = parse_manifest(&out).unwrap();
         assert_eq!(m.stages.len(), 2);
         assert!(m.stages[1].needs_user_input);
+    }
+
+    #[test]
+    fn pin_reads_release_branch_and_defaults_to_main() {
+        let shipped = include_str!("../../../src-tauri/resources/hermes/pin.json");
+        let pin: Pin = serde_json::from_str(shipped).unwrap();
+        assert!(
+            pin.branch.starts_with("release/"),
+            "release commits live on release/<version>, not main: {}",
+            pin.branch
+        );
+        assert!(pin.branch.ends_with(pin.version.trim_start_matches('v')));
+        let legacy: Pin = serde_json::from_str(r#"{"version":"v1","commit":"abc"}"#).unwrap();
+        assert_eq!(legacy.branch, "main");
     }
 
     #[test]

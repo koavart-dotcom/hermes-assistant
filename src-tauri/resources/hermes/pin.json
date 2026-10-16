@@ -1,6 +1,7 @@
 {
   "version": "v0.22.2",
   "commit": "d923a5eb487a17c0a68801bba9ef0f56c81040a8",
+  "branch": "release/0.22.2",
   "script": "scripts/install.ps1",
   "fetched_at": "2026-10-15"
 }

@@ -254,6 +254,7 @@ mod tests {
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),
+                branch: "main".into(),
             },
         }
         .plan();

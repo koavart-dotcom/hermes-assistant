@@ -19,6 +19,9 @@
 - **`docs/OPEN_SOURCE_RESEARCH.md`** — исследование аналогов и Hermes Agent (15.10.2026), с фактами
   о возможностях Hermes (раздел 6). **`docs/ARCHITECTURE.md`**, **`docs/ROADMAP.md`** — архитектура и
   этапы варианта B. **`docs/decisions.md`** — ADR.
+- **Релизы Hermes живут на ветках `release/<версия>`, не на `main`** (v0.22.2 = `release/0.22.2`):
+  `install.ps1 -Commit` требует `-Branch` с этой веткой, иначе `commit_not_on_branch` (первый прогон
+  мастера 16.10). Pin: `src-tauri/resources/hermes/pin.json` {version, commit, branch}.
 - Перед опорой на любую возможность Hermes Agent проверять актуальную документацию
   (hermes-agent.nousresearch.com, репозиторий NousResearch/hermes-agent): релизы выходят ежедневно,
   API меняется. Версия, на которую ориентируемся, фиксируется в `docs/ARCHITECTURE.md`.
