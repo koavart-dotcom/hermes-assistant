@@ -3,4 +3,8 @@
 /**
  * A matched command, as shown to the UI.
  */
-export type QuickMatch = { id: string, name: string, score: number, needs_confirm: boolean, stops_speech: boolean, };
+export type QuickMatch = { id: string, name: string, score: number, needs_confirm: boolean, stops_speech: boolean, 
+/**
+ * Free part of a parametrised phrase (`найди в ютубе {query}` → the rest).
+ */
+query: string | null, };

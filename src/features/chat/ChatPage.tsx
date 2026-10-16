@@ -108,7 +108,7 @@ export function ChatPage() {
           setPendingQuick({ sessionId, match: quick });
           return;
         }
-        const r = await api.quickRun(quick.id, false);
+        const r = await api.quickRun(quick.id, false, quick.query);
         addAssistantTurn(sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined));
         if (r.ui === "hud") await api.hudWindowOpen();
         if (r.ui === "hud_off") await api.hudWindowClose();
@@ -248,7 +248,7 @@ export function ChatPage() {
                         const q = pendingQuick;
                         setPendingQuick(null);
                         api
-                          .quickRun(q.match.id, true)
+                          .quickRun(q.match.id, true, q.match.query)
                           .then((r) => addAssistantTurn(q.sessionId, r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена`, r.ok ? undefined : (r.error ?? undefined)))
                           .catch((e) => setError(errorText(e)));
                       }}

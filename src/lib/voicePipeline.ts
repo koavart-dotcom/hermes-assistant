@@ -98,7 +98,7 @@ export async function handleUtterance(text: string): Promise<void> {
         v.setPhase(idlePhase());
         return;
       }
-      const r = await api.quickRun(quick.id, false);
+      const r = await api.quickRun(quick.id, false, quick.query);
       v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
       v.setPhase(idlePhase());
       if (r.ui) await showUi(r.ui);
@@ -127,7 +127,7 @@ export async function confirmPendingQuick(yes: boolean): Promise<void> {
   if (!q || !yes) return;
   const v = useVoiceStore.getState();
   try {
-    const r = await api.quickRun(q.id, true);
+    const r = await api.quickRun(q.id, true, q.query);
     v.setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
     if (r.ui) await showUi(r.ui);
   } catch (e) {

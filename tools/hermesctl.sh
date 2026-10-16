@@ -9,6 +9,7 @@
 #   tools/hermesctl.sh cancel | gateway-start | gateway-stop
 #   tools/hermesctl.sh cli config get model.default      # any `hermes ...` command
 #   tools/hermesctl.sh config-get | config-put <file> | env
+#   tools/hermesctl.sh quick-run web.google курс доллара  # parametrised quick command
 #   tools/hermesctl.sh tickets                           # FreeScout: mine + unassigned
 #   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
 #   tools/hermesctl.sh raw GET /status                   # any endpoint

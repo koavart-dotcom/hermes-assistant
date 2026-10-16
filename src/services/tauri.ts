@@ -51,8 +51,8 @@ export const api = {
 
   quickCommands: () => invoke<QuickCommandInfo[]>("quick_commands"),
   quickMatch: (text: string) => invoke<QuickMatch | null>("quick_match", { text }),
-  quickRun: (id: string, confirmed = false) =>
-    invoke<QuickRunResult>("quick_run", { id, confirmed }),
+  quickRun: (id: string, confirmed = false, query?: string | null) =>
+    invoke<QuickRunResult>("quick_run", { id, confirmed, query: query ?? null }),
   quickImportVoices: (sourceDir: string, name?: string) =>
     invoke<number>("quick_import_voices", { sourceDir, name: name ?? null }),
 

@@ -79,6 +79,8 @@ pub struct QuickMatch {
     pub score: f64,
     pub needs_confirm: bool,
     pub stops_speech: bool,
+    /// Free part of a parametrised phrase (`найди в ютубе {query}` → the rest).
+    pub query: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -133,6 +135,76 @@ pub fn similarity(a: &str, b: &str) -> f64 {
 }
 
 pub const MATCH_THRESHOLD: f64 = 0.82;
+/// Placeholder in phrases and actions of parametrised commands.
+pub const QUERY: &str = "{query}";
+
+/// Walk the raw words, skipping wake/filler words, until their normalised
+/// tokens cover `prefix`; return the untouched remainder (trailing
+/// punctuation trimmed) or `None` when the raw text does not start that way.
+fn raw_tail_after(raw: &str, prefix: &str, optional: &[String], wake: &[String]) -> Option<String> {
+    let want: Vec<&str> = prefix.split(' ').collect();
+    let mut got = 0usize;
+    let words: Vec<&str> = raw.split_whitespace().collect();
+    let mut i = 0;
+    while i < words.len() && got < want.len() {
+        let n = normalize(words[i]);
+        i += 1;
+        if n.is_empty() || optional.contains(&n) || wake.contains(&n) {
+            continue;
+        }
+        for tok in n.split(' ') {
+            if got < want.len() && want[got] == tok {
+                got += 1;
+            } else {
+                return None;
+            }
+        }
+    }
+    if got < want.len() {
+        return None;
+    }
+    // Filler words right after the prefix ("загугли, пожалуйста, курс") are not the query.
+    while i < words.len() {
+        let n = normalize(words[i]);
+        if n.is_empty() || optional.contains(&n) {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    let tail = words[i..].join(" ");
+    let q = tail
+        .trim_end_matches(['.', '!', '?', ',', ';', ':'])
+        .trim()
+        .to_string();
+    (!q.is_empty()).then_some(q)
+}
+
+/// Substitute `{query}` into an action string: percent-encoded inside
+/// `url:`, verbatim elsewhere. Actions without the placeholder are returned as is.
+pub fn fill_action(action: &str, query: Option<&str>) -> String {
+    if !action.contains(QUERY) {
+        return action.to_string();
+    }
+    let q = query.unwrap_or("");
+    if let Some(rest) = action.strip_prefix("url:") {
+        // `url:https://{query}` → keep a bare host usable; everything else is encoded.
+        let value = if rest.trim_start().starts_with(QUERY)
+            || rest.trim_start().starts_with("https://{query}")
+            || rest.trim_start().starts_with("http://{query}")
+        {
+            q.trim()
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .to_string()
+        } else {
+            crate::freescout::url_encode(q.trim())
+        };
+        format!("url:{}", rest.replace(QUERY, &value))
+    } else {
+        action.replace(QUERY, q.trim())
+    }
+}
 
 impl QuickPack {
     /// Text after normalization, without wake words at the start and
@@ -192,12 +264,62 @@ impl QuickPack {
                 }
             }
         }
-        best.map(|(score, c)| QuickMatch {
+        // An explicit parametrised phrase ("открой сайт …") beats a fuzzy or
+        // contained fixed one; only an exact fixed phrase beats it.
+        let param = self.find_parametrised(text, &query, &optional);
+        match (best, param) {
+            (Some((score, c)), p) if score >= 1.0 || p.is_none() => Some(QuickMatch {
+                id: c.id.clone(),
+                name: c.name.clone(),
+                score,
+                needs_confirm: c.confirm,
+                stops_speech: c.actions.iter().any(|a| a == "stop_speech"),
+                query: None,
+            }),
+            (_, p) => p,
+        }
+    }
+
+    /// Phrases with `{query}`: the prepared text must start with the phrase
+    /// prefix; what follows is the query, taken from the raw text so that
+    /// dots and case survive (`открой сайт github.com`).
+    fn find_parametrised(
+        &self,
+        raw: &str,
+        prepared: &str,
+        optional: &[String],
+    ) -> Option<QuickMatch> {
+        let wake: Vec<String> = self.wake_words.iter().map(|w| normalize(w)).collect();
+        let mut best: Option<(usize, &QuickCommand, String)> = None;
+        for c in &self.commands {
+            for p in c.phrases.iter().filter(|p| p.contains(QUERY)) {
+                let prefix = strip_words(&normalize(&p.replace(QUERY, "")), optional);
+                if prefix.is_empty() {
+                    continue;
+                }
+                let Some(rest) = prepared.strip_prefix(prefix.as_str()) else {
+                    continue;
+                };
+                if !rest.starts_with(' ') || rest.trim().is_empty() {
+                    continue;
+                }
+                let Some(query) = raw_tail_after(raw, &prefix, optional, &wake) else {
+                    continue;
+                };
+                // Longest prefix wins ("найди в ютубе" over "найди").
+                let plen = prefix.len();
+                if best.as_ref().is_none_or(|(l, _, _)| plen > *l) {
+                    best = Some((plen, c, query));
+                }
+            }
+        }
+        best.map(|(_, c, query)| QuickMatch {
             id: c.id.clone(),
             name: c.name.clone(),
-            score,
+            score: 0.95,
             needs_confirm: c.confirm,
-            stops_speech: c.actions.iter().any(|a| a == "stop_speech"),
+            stops_speech: false,
+            query: Some(query),
         })
     }
 
@@ -271,6 +393,8 @@ pub const KEY_NAMES: &[&str] = &[
     "media_prev",
     ".",
     "+",
+    "-",
+    "=",
 ];
 
 pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
@@ -505,7 +629,8 @@ mod platform {
             "media_prev" => 0xB1,
             "media_play_pause" => 0xB3,
             "." => 0xBE,
-            "+" => 0xBB,
+            "+" | "=" => 0xBB,
+            "-" => 0xBD,
             s if s.len() == 1 => {
                 let c = s.as_bytes()[0].to_ascii_uppercase();
                 if c.is_ascii_alphanumeric() {
@@ -740,6 +865,47 @@ mod tests {
         assert_eq!(m.id, "pwr.shutdown");
         assert!(m.needs_confirm);
         assert!(p.find("стоп").unwrap().stops_speech);
+    }
+
+    #[test]
+    fn parametrised_phrases_take_the_tail_as_query() {
+        let p = pack();
+        let m = p.find("Джарвис, найди в ютубе котиков на пианино").unwrap();
+        assert_eq!(m.id, "web.youtube_search");
+        assert_eq!(m.query.as_deref(), Some("котиков на пианино"));
+        let m = p.find("открой сайт github.com").unwrap();
+        assert_eq!(m.id, "web.open_site");
+        assert_eq!(m.query.as_deref(), Some("github.com"));
+        let m = p.find("загугли, пожалуйста, курс доллара.").unwrap();
+        assert_eq!(m.id, "web.google");
+        assert_eq!(m.query.as_deref(), Some("курс доллара"));
+        assert_eq!(
+            p.find("запусти программу paint").unwrap().query.as_deref(),
+            Some("paint")
+        );
+        // Fixed phrases still win and carry no query.
+        assert!(p.find("открой браузер").unwrap().query.is_none());
+        // A bare prefix without a query is not a match.
+        assert!(
+            p.find("найди в ютубе").is_none() || p.find("найди в ютубе").unwrap().query.is_none()
+        );
+    }
+
+    #[test]
+    fn fills_query_into_actions() {
+        assert_eq!(
+            fill_action(
+                "url:https://www.youtube.com/results?search_query={query}",
+                Some("кот и пёс")
+            ),
+            "url:https://www.youtube.com/results?search_query=%D0%BA%D0%BE%D1%82%20%D0%B8%20%D0%BF%D1%91%D1%81"
+        );
+        assert_eq!(
+            fill_action("url:https://{query}", Some("https://github.com")),
+            "url:https://github.com"
+        );
+        assert_eq!(fill_action("app:{query}", Some("paint")), "app:paint");
+        assert_eq!(fill_action("key:win+d", Some("x")), "key:win+d");
     }
 
     #[test]

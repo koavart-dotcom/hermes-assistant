@@ -651,13 +651,19 @@ struct QuickRunRequest {
     id: String,
     #[serde(default)]
     confirmed: bool,
+    #[serde(default)]
+    query: Option<String>,
 }
 
 async fn quick_run(
     State(ctl): State<Arc<Ctl>>,
     Json(req): Json<QuickRunRequest>,
 ) -> ApiResult<Json<crate::supervisor_quick::QuickRunResult>> {
-    Ok(Json(ctl.sup.quick_run(&req.id, req.confirmed).await?))
+    Ok(Json(
+        ctl.sup
+            .quick_run(&req.id, req.confirmed, req.query.as_deref())
+            .await?,
+    ))
 }
 
 #[derive(Deserialize)]

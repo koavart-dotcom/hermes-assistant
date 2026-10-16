@@ -57,7 +57,12 @@ impl Supervisor {
     }
 
     /// Run command `id`. Dangerous commands need `confirmed == true`.
-    pub async fn quick_run(&self, id: &str, confirmed: bool) -> Result<QuickRunResult> {
+    pub async fn quick_run(
+        &self,
+        id: &str,
+        confirmed: bool,
+        query: Option<&str>,
+    ) -> Result<QuickRunResult> {
         let pack = self.quick_pack()?;
         let cmd = pack
             .get(id)
@@ -66,7 +71,7 @@ impl Supervisor {
         let actions: Vec<Action> = cmd
             .actions
             .iter()
-            .map(|a| quick::parse_action(a).map_err(CoreError::Other))
+            .map(|a| quick::parse_action(&quick::fill_action(a, query)).map_err(CoreError::Other))
             .collect::<Result<_>>()?;
         let dangerous = cmd.confirm || actions.iter().any(quick::is_dangerous);
         if dangerous && !confirmed {
@@ -90,7 +95,10 @@ impl Supervisor {
         );
         Ok(QuickRunResult {
             id: cmd.id,
-            name: cmd.name,
+            name: match query {
+                Some(q) => format!("{}: {q}", cmd.name),
+                None => cmd.name,
+            },
             ok,
             error,
             stops_speech: actions.iter().any(|a| matches!(a, Action::StopSpeech)),

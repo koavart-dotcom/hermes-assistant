@@ -227,10 +227,11 @@ pub async fn quick_run(
     state: State<'_, AppState>,
     id: String,
     confirmed: Option<bool>,
+    query: Option<String>,
 ) -> Result<QuickRunResult, String> {
     state
         .supervisor
-        .quick_run(&id, confirmed.unwrap_or(false))
+        .quick_run(&id, confirmed.unwrap_or(false), query.as_deref())
         .await
         .map_err(err)
 }
