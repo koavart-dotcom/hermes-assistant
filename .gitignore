@@ -10,3 +10,7 @@ src-tauri/gen/schemas/
 coverage/
 *.tsbuildinfo
 crates/src/
+
+# MCP claude bridge: token and log stay local
+tools/mcp-claude-bridge/bridge.token
+tools/mcp-claude-bridge/bridge.log

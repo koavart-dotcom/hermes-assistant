@@ -1,0 +1,15 @@
+[Unit]
+Description=MCP bridge: Hermes Agent -> Claude Code (subscription) on this server
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/ai-agent/tools/mcp-claude-bridge
+ExecStart=/usr/bin/python3 -I %h/projects/ai-agent/tools/mcp-claude-bridge/server.py
+Restart=on-failure
+RestartSec=5
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+Environment=CLAUDE_BRIDGE_PORT=8650
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,6 @@
+{
+  "hermes-assistant": {
+    "path": "~/projects/ai-agent",
+    "description": "Hermes Assistant — Tauri-оболочка над Hermes Agent (этот проект)"
+  }
+}
