@@ -108,6 +108,7 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/voice/setup", post(voice_setup))
         .route("/voice/transcribe", post(voice_transcribe))
         .route("/voice/speak", post(voice_speak))
+        .route("/voice/restart", post(voice_restart))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -551,6 +552,11 @@ async fn voice_setup(State(ctl): State<Arc<Ctl>>) -> ApiResult<(StatusCode, Json
         StatusCode::ACCEPTED,
         Json(json!({ "started": true, "last_seq": ctl.sup.last_seq() })),
     ))
+}
+
+async fn voice_restart(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
+    ctl.sup.voice_restart_server().await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 #[derive(Deserialize)]

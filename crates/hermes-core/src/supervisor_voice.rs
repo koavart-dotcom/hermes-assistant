@@ -34,7 +34,7 @@ impl Supervisor {
             server_running: vs.is_running().await,
             stt_provider: get("stt.provider"),
             tts_provider: get("tts.provider"),
-            tts_voice: get("tts.edge.voice"),
+            tts_voice: get("tts.piper.voice"),
         })
     }
 
@@ -124,6 +124,31 @@ impl Supervisor {
             *c = Some(child);
         }
         Ok(true)
+    }
+
+    /// Stop our web server (so it reloads the Hermes environment, e.g. after
+    /// `hermes pm install`) and start it again.
+    pub async fn voice_restart_server(&self) -> Result<()> {
+        let vs = self.voice_server()?;
+        {
+            let mut c = self
+                .dashboard_child
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some(child) = c.as_mut() {
+                let _ = child.start_kill();
+            }
+            *c = None;
+        }
+        vs.stop_owned().await?;
+        if let Some(child) = vs.start().await? {
+            let mut c = self
+                .dashboard_child
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            *c = Some(child);
+        }
+        Ok(())
     }
 
     pub async fn voice_transcribe(&self, audio: &[u8], mime: &str) -> Result<String> {

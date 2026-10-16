@@ -75,8 +75,11 @@ pub fn settings() -> Vec<(String, String)> {
         ("stt.provider".into(), "local".into()),
         ("stt.local.model".into(), "small".into()),
         ("stt.local.language".into(), "ru".into()),
-        ("tts.provider".into(), "edge".into()),
-        ("tts.edge.voice".into(), "ru-RU-DmitryNeural".into()),
+        // Piper: offline, Russian voices auto-download from rhasspy/piper-voices.
+        // Edge TTS (the Hermes default) answered 403 on the PC on 16.10.2026 —
+        // Microsoft locked the free endpoint for older clients.
+        ("tts.provider".into(), "piper".into()),
+        ("tts.piper.voice".into(), "ru_RU-dmitri-medium".into()),
     ]
 }
 
@@ -134,6 +137,19 @@ impl VoiceServer {
         run_hermes(
             &self.layout,
             &["pm", "install", "--extra", "voice"],
+            Some(events),
+            cancel,
+        )
+        .await?;
+        emit(
+            events,
+            SetupEvent::Log {
+                line: "voice: hermes pm install --extra piper (offline TTS)".into(),
+            },
+        );
+        run_hermes(
+            &self.layout,
+            &["pm", "install", "--extra", "piper"],
             Some(events),
             cancel,
         )
@@ -205,6 +221,34 @@ impl VoiceServer {
         ))
     }
 
+    /// Kill `hermes dashboard` processes we started (Windows: python with
+    /// `dashboard` and our port on the command line) and wait until the port
+    /// stops answering.
+    pub async fn stop_owned(&self) -> Result<()> {
+        if !cfg!(windows) {
+            return Ok(());
+        }
+        let script = format!(
+            "Get-CimInstance Win32_Process | Where-Object {{ $_.Name -match 'python' -and $_.CommandLine -match 'dashboard' -and $_.CommandLine -match '{DASHBOARD_PORT}' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}"
+        );
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        hide_console(&mut cmd);
+        let _ = cmd.status().await;
+        for _ in 0..40 {
+            if !self.is_running().await {
+                return Ok(());
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        Err(CoreError::Other(
+            "hermes dashboard still answers after stopping".into(),
+        ))
+    }
+
     /// Transcribe a recording (`mime` like `audio/wav`); empty string = silence.
     pub async fn transcribe(&self, audio: &[u8], mime: &str) -> Result<String> {
         use base64::Engine as _;
@@ -272,8 +316,8 @@ mod tests {
         let get = |k: &str| s.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
         assert_eq!(get("stt.provider"), Some("local"));
         assert_eq!(get("stt.local.language"), Some("ru"));
-        assert_eq!(get("tts.provider"), Some("edge"));
-        assert!(get("tts.edge.voice").unwrap().starts_with("ru-RU"));
+        assert_eq!(get("tts.provider"), Some("piper"));
+        assert!(get("tts.piper.voice").unwrap().starts_with("ru_RU"));
     }
 
     #[test]

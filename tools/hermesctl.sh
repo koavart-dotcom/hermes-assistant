@@ -89,6 +89,7 @@ case "${cmd}" in
   chat-approve)  call POST /chat/approve "{\"run_id\":\"${1:?run id}\",\"choice\":\"${2:?choice}\"}" ;;
   voice-status)  call GET /voice/status ;;
   voice-setup)   call POST /voice/setup ;;
+  voice-restart) call POST /voice/restart ;;
   voice-speak)   msg="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))')"
                  call POST /voice/speak "${msg}" ;;
   voice-transcribe) f="${1:?wav file}"; body="$(python3 -c 'import base64,json,sys; print(json.dumps({"audio_base64": base64.b64encode(open(sys.argv[1],"rb").read()).decode(), "mime_type": "audio/wav"}))' "$f")"

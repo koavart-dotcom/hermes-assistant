@@ -220,8 +220,8 @@ export function VoicePage() {
       {s && s.hermes_installed && !ready ? (
         <div className="mb-6 max-w-xl rounded-lg border p-4 text-sm">
           <p>
-            Для голоса нужно один раз установить распознавание речи (Faster-Whisper, около 1 ГБ с моделью) и включить
-            русские настройки. Озвучка через Edge TTS, нужен интернет.
+            Для голоса нужно один раз установить распознавание речи (Faster-Whisper, около 1 ГБ с моделью) и
+            озвучку (Piper, русский голос, работает без интернета).
           </p>
           <Button className="mt-3" onClick={runSetup} disabled={settingUp}>
             {settingUp ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
