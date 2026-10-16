@@ -63,6 +63,14 @@ pub fn run() {
                 }
             });
 
+            // Restart the Ollama sidecar with the current environment.
+            let sup_ollama = sup.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = sup_ollama.ollama_refresh().await {
+                    log::warn!("ollama refresh failed: {e}");
+                }
+            });
+
             // Control API on loopback (reached remotely through an SSH tunnel).
             match control::token(&sup.ctx.layout) {
                 Ok(token) => {

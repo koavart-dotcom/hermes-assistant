@@ -24,6 +24,8 @@ pub const OLLAMA_ZIP_BYTES: u64 = 1_471_226_485;
 pub const DEFAULT_PORT: u16 = 11434;
 /// How many ports above [`DEFAULT_PORT`] to try.
 pub const PORT_TRIES: u16 = 10;
+/// `OLLAMA_CONTEXT_LENGTH` for the sidecar (tokens). See `start`.
+pub const OLLAMA_CONTEXT_LENGTH: &str = "65536";
 
 pub fn zip_url() -> String {
     format!(
@@ -263,6 +265,13 @@ impl Ollama {
             .env("OLLAMA_HOST", &self.host)
             .env("OLLAMA_MODELS", &self.layout.models_dir)
             .env("OLLAMA_KEEP_ALIVE", "24h")
+            // Hermes sends ~14k tokens of system prompt + tool schemas before
+            // the conversation; Ollama's default 4096 context silently cut the
+            // tools off ("truncating input prompt"), so the model only chatted.
+            // Hermes documents 64k as the minimum for agentic work; qwen3.5 is
+            // hybrid-attention and fits 64k in 7.3 GB VRAM on the 3080 Ti.
+            .env("OLLAMA_CONTEXT_LENGTH", OLLAMA_CONTEXT_LENGTH)
+            .env("OLLAMA_FLASH_ATTENTION", "1")
             .current_dir(&self.layout.ollama_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
@@ -288,6 +297,36 @@ impl Ollama {
             "ollama serve did not become ready in 90 s; last log lines: {}",
             self.log_tail(8)
         )))
+    }
+
+    /// Stop `ollama serve` processes started from our `ollama_dir` (Windows
+    /// only), so a fresh `start` picks up changed environment such as the
+    /// context length. Foreign Ollama installs are left alone. Waits until
+    /// our port stops answering.
+    pub async fn stop_owned(&self) -> Result<()> {
+        if !cfg!(windows) {
+            return Ok(());
+        }
+        let exe = self.layout.ollama_exe().display().to_string();
+        let script = format!(
+            "Get-Process ollama -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq '{exe}' }} | Stop-Process -Force"
+        );
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        hide_console(&mut cmd);
+        let _ = cmd.status().await;
+        for _ in 0..40 {
+            if !self.is_running().await {
+                return Ok(());
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        }
+        Err(CoreError::Other(
+            "ollama still answers after stopping owned processes".into(),
+        ))
     }
 
     /// `<app_data_dir>/logs/ollama.log` — stdout+stderr of `ollama serve`.

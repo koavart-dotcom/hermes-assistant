@@ -204,6 +204,25 @@ impl Supervisor {
         self.gateway().start(None, &CancellationToken::new()).await
     }
 
+    /// At app start: restart our Ollama sidecar so it runs with the current
+    /// environment (context length, port), then make sure it is up. A
+    /// sidecar left over from a previous app version keeps the old settings
+    /// otherwise. No-op when Ollama is not installed yet.
+    pub async fn ollama_refresh(&self) -> Result<()> {
+        let ollama = Ollama::new(self.ctx.layout.clone());
+        if !ollama.is_installed() {
+            return Ok(());
+        }
+        if ollama.is_running().await {
+            log::info!("restarting the Ollama sidecar with the current environment");
+            ollama.stop_owned().await?;
+        }
+        if let Some(child) = ollama.start().await? {
+            self.adopt_ollama(child);
+        }
+        Ok(())
+    }
+
     pub async fn gateway_stop(&self) -> Result<()> {
         Gateway::new(self.ctx.layout.clone(), None)
             .stop(None, &CancellationToken::new())
