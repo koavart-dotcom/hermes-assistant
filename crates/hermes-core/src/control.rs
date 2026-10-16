@@ -105,7 +105,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/chat/events", get(chat_events))
         .route("/update/token", axum::routing::put(update_token))
         .route("/permissions/log", get(permissions_log))
-        .route("/permissions/policy", get(permissions_policy_get).put(permissions_policy_put))
+        .route(
+            "/permissions/policy",
+            get(permissions_policy_get).put(permissions_policy_put),
+        )
         .layer(middleware::from_fn_with_state(ctl.clone(), auth));
     let api = Router::new().route("/health", get(health)).merge(protected);
     Router::new().nest(BASE_PATH, api).with_state(ctl)
@@ -529,7 +532,10 @@ async fn update_token(
 }
 
 /// Last `tail` decisions of the permission plugin (JSON lines, newest last).
-async fn permissions_log(State(ctl): State<Arc<Ctl>>, Query(q): Query<Tail>) -> ApiResult<Json<Vec<Value>>> {
+async fn permissions_log(
+    State(ctl): State<Arc<Ctl>>,
+    Query(q): Query<Tail>,
+) -> ApiResult<Json<Vec<Value>>> {
     let path = crate::plugins::log_path(&ctl.sup.ctx.layout);
     if !path.exists() {
         return Ok(Json(Vec::new()));
@@ -554,14 +560,19 @@ async fn permissions_policy_get(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<V
 }
 
 /// Replace the policy override; the plugin re-reads it on every tool call.
-async fn permissions_policy_put(State(ctl): State<Arc<Ctl>>, Json(policy): Json<Value>) -> ApiResult<Json<Value>> {
+async fn permissions_policy_put(
+    State(ctl): State<Arc<Ctl>>,
+    Json(policy): Json<Value>,
+) -> ApiResult<Json<Value>> {
     if !policy.is_object() {
         return Err(bad_request("policy must be a JSON object"));
     }
     let path = crate::plugins::policy_path(&ctl.sup.ctx.layout);
     let text = serde_json::to_string_pretty(&policy).map_err(CoreError::from)?;
     write_with_backup(&path, &text)?;
-    Ok(Json(json!({ "ok": true, "path": path.display().to_string() })))
+    Ok(Json(
+        json!({ "ok": true, "path": path.display().to_string() }),
+    ))
 }
 
 #[derive(Serialize)]

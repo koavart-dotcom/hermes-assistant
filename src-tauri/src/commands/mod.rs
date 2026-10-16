@@ -169,7 +169,10 @@ pub async fn chat_approve(
 
 /// Last decisions of the permission plugin (JSON objects, newest last).
 #[tauri::command]
-pub fn permissions_log(state: State<'_, AppState>, tail: Option<usize>) -> Result<Vec<serde_json::Value>, String> {
+pub fn permissions_log(
+    state: State<'_, AppState>,
+    tail: Option<usize>,
+) -> Result<Vec<serde_json::Value>, String> {
     let path = hermes_core::plugins::log_path(&state.supervisor.ctx.layout);
     if !path.exists() {
         return Ok(Vec::new());
