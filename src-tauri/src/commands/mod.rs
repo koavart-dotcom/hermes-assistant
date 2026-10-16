@@ -340,7 +340,11 @@ pub async fn tickets_fetch(state: State<'_, AppState>) -> Result<TicketsSnapshot
     log::info!("tickets: fetch");
     let r = state.supervisor.freescout_tickets().await.map_err(err);
     match &r {
-        Ok(s) => log::info!("tickets: mine {} unassigned {}", s.mine.len(), s.unassigned.len()),
+        Ok(s) => log::info!(
+            "tickets: mine {} unassigned {}",
+            s.mine.len(),
+            s.unassigned.len()
+        ),
         Err(e) => log::warn!("tickets: fetch failed: {e}"),
     }
     r
