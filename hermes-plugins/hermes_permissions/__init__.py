@@ -119,6 +119,14 @@ DEFAULT_TOOLS: dict[str, str] = {
     "skill_manage": "confirm",
     "session_search": "allow",
     "clarify": "allow",
+    # Hermes meta-tools: looking up tool descriptions changes nothing.
+    "tool_search": "allow",
+    "tool_describe": "allow",
+    # MCP bridge to Claude Code on the server (tools/mcp-claude-bridge):
+    # listing is harmless, handing over a task needs a human.
+    "mcp_claude_claude_projects": "allow",
+    "mcp_claude_claude_status": "allow",
+    "mcp_claude_claude_task": "confirm",
     "send_message": "confirm",
     "schedule_cron": "confirm",
     "cronjob": "confirm",
