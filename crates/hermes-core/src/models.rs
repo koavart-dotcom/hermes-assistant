@@ -89,7 +89,29 @@ pub struct ModelOption {
     pub base_url: String,
     /// Name of the `.env` key the provider needs (empty for local).
     pub needs_key: String,
+    /// The provider is usable now: no key needed, the key is set, or a
+    /// subscription login (OAuth) is stored by Hermes.
+    pub ready: bool,
     pub hint: String,
+}
+
+/// Hermes stores its own Anthropic OAuth grant here (`hermes auth add anthropic --type oauth`).
+pub fn anthropic_oauth_present(layout: &Layout) -> bool {
+    layout.hermes_home.join(".anthropic_oauth.json").is_file()
+        || layout.hermes_home.join("auth.json").is_file()
+}
+
+/// Fill `ready` from the `.env` keys and the OAuth files of a layout.
+pub fn mark_ready(opts: &mut [ModelOption], layout: &Layout) {
+    let env = std::fs::read_to_string(layout.env_file()).unwrap_or_default();
+    let keys: std::collections::HashMap<String, String> =
+        crate::envkeys::parse(&env).into_iter().collect();
+    let oauth = anthropic_oauth_present(layout);
+    for o in opts.iter_mut() {
+        o.ready = o.needs_key.is_empty()
+            || keys.get(&o.needs_key).is_some_and(|v| !v.trim().is_empty())
+            || (o.provider == "anthropic" && oauth);
+    }
 }
 
 pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOption> {
@@ -102,6 +124,7 @@ pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOpti
             model: m.clone(),
             base_url: format!("{ollama_base_url}/v1"),
             needs_key: String::new(),
+            ready: true,
             hint: "Работает на вашей видеокарте, без интернета.".into(),
         })
         .collect();
@@ -112,6 +135,7 @@ pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOpti
         model: "qwen3.8-27b".into(),
         base_url: "http://172.15.15.125:8000/v1".into(),
         needs_key: String::new(),
+        ready: true,
         hint: "Сервер Deka; доступен только из сети компании.".into(),
     });
     out.push(ModelOption {
@@ -121,7 +145,8 @@ pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOpti
         model: "claude-sonnet-5-5".into(),
         base_url: String::new(),
         needs_key: "ANTHROPIC_API_KEY".into(),
-        hint: "Платно, нужен ключ в «Интеграции и ключи».".into(),
+        ready: false,
+        hint: "Ключ API в «Интеграции и ключи» (платно) или вход по подписке Claude Max: `hermes auth add anthropic --type oauth`.".into(),
     });
     out.push(ModelOption {
         id: "openai".into(),
@@ -130,6 +155,7 @@ pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOpti
         model: "gpt-5".into(),
         base_url: String::new(),
         needs_key: "OPENAI_API_KEY".into(),
+        ready: false,
         hint: "Платно, нужен ключ в «Интеграции и ключи».".into(),
     });
     out.push(ModelOption {
@@ -139,6 +165,7 @@ pub fn options(ollama_models: &[String], ollama_base_url: &str) -> Vec<ModelOpti
         model: "gemini-2.5-pro".into(),
         base_url: String::new(),
         needs_key: "GEMINI_API_KEY".into(),
+        ready: false,
         hint: "Платно, нужен ключ в «Интеграции и ключи».".into(),
     });
     out
@@ -401,9 +428,29 @@ agent:
         let s = current_speech(&layout);
         assert_eq!(s.tts_voice, "ru_RU-dmitri-medium");
         assert_eq!(s.stt_model, "small");
-        let opts = options(&["qwen3.5".into()], "http://127.0.0.1:11437");
+        let mut opts = options(&["qwen3.5".into()], "http://127.0.0.1:11437");
         assert_eq!(opts[0].id, "ollama:qwen3.5");
         assert!(opts.iter().any(|o| o.provider == "anthropic"));
+        mark_ready(&mut opts, &layout);
+        assert!(opts[0].ready);
+        assert!(
+            !opts
+                .iter()
+                .find(|o| o.provider == "anthropic")
+                .unwrap()
+                .ready
+        );
+        std::fs::write(layout.hermes_home.join(".anthropic_oauth.json"), "{}").unwrap();
+        mark_ready(&mut opts, &layout);
+        assert!(
+            opts.iter()
+                .find(|o| o.provider == "anthropic")
+                .unwrap()
+                .ready
+        );
+        std::fs::write(layout.env_file(), "OPENAI_API_KEY=sk-x\n").unwrap();
+        mark_ready(&mut opts, &layout);
+        assert!(opts.iter().find(|o| o.provider == "openai").unwrap().ready);
         assert!(
             tts_options()
                 .iter()

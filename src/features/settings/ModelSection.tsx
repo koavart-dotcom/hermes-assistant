@@ -16,7 +16,6 @@ export function ModelSection() {
   const enabled = isTauri();
   const current = useQuery({ queryKey: ["model_current"], queryFn: api.modelCurrent, enabled });
   const options = useQuery({ queryKey: ["model_options"], queryFn: api.modelOptions, enabled });
-  const keys = useQuery({ queryKey: ["env_keys"], queryFn: api.envKeysList, enabled });
   const [picked, setPicked] = useState<string | null>(null);
   const [modelName, setModelName] = useState<string | null>(null);
   const [pullTag, setPullTag] = useState("");
@@ -82,7 +81,6 @@ export function ModelSection() {
     }
   };
 
-  const keyPresent = (name: string) => !name || (keys.data ?? []).some((k) => k.name === name && k.masked);
   const changed = selected && (selected.id !== currentId || (selected.provider !== "custom" && effectiveName.trim() !== (cur?.model ?? "")));
 
   return (
@@ -102,7 +100,7 @@ export function ModelSection() {
             <span className="min-w-0 flex-1">
               <span className="font-medium">{o.title}</span>
               <span className="block text-xs text-muted-foreground">{o.hint}</span>
-              {o.needs_key && !keyPresent(o.needs_key) ? <span className="block text-xs text-amber-600">Нет ключа {o.needs_key} — задайте его в «Интеграции и ключи».</span> : null}
+              {!o.ready ? <span className="block text-xs text-amber-600">Нет доступа: ключ {o.needs_key} в «Интеграции и ключи» или вход по подписке.</span> : null}
               {selectedId === o.id && o.provider !== "custom" ? (
                 <Input className="mt-2 font-mono" aria-label="Имя модели" value={effectiveName} onChange={(e) => setModelName(e.target.value)} placeholder={o.model} />
               ) : null}
@@ -111,7 +109,7 @@ export function ModelSection() {
         ))}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => selected && apply.mutate(selected)} disabled={!selected || !changed || apply.isPending || (selected.needs_key !== "" && !keyPresent(selected.needs_key))}>
+        <Button onClick={() => selected && apply.mutate(selected)} disabled={!selected || !changed || apply.isPending || !selected.ready}>
           {apply.isPending ? <Loader2 className="mr-1 size-4 animate-spin" /> : null}
           {apply.isPending ? "Применяю…" : "Применить и перезапустить Hermes"}
         </Button>

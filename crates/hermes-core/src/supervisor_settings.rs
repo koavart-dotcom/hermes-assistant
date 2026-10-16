@@ -73,7 +73,9 @@ impl Supervisor {
         } else {
             Vec::new()
         };
-        Ok(models::options(&local, &ollama.base_url()))
+        let mut opts = models::options(&local, &ollama.base_url());
+        models::mark_ready(&mut opts, &self.ctx.layout);
+        Ok(opts)
     }
 
     pub fn model_current(&self) -> ModelSettings {

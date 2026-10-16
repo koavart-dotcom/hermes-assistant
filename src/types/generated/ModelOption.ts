@@ -7,4 +7,9 @@ export type ModelOption = { id: string, title: string, provider: string, model: 
 /**
  * Name of the `.env` key the provider needs (empty for local).
  */
-needs_key: string, hint: string, };
+needs_key: string, 
+/**
+ * The provider is usable now: no key needed, the key is set, or a
+ * subscription login (OAuth) is stored by Hermes.
+ */
+ready: boolean, hint: string, };
