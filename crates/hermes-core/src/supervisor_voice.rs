@@ -14,7 +14,10 @@ use crate::voice::{VoiceServer, VoiceStatus};
 use crate::{CoreError, Result};
 
 /// Reaction clips (voice pack paths) played while the model works on a voice question.
-const ACK_CLIPS: &[&str] = &["Подтверждение_Ответ/Вас понял, сэр", "Подтверждение_Ответ/Принято, сэр"];
+const ACK_CLIPS: &[&str] = &[
+    "Подтверждение_Ответ/Вас понял, сэр",
+    "Подтверждение_Ответ/Принято, сэр",
+];
 
 impl Supervisor {
     pub fn voice_server(&self) -> Result<VoiceServer> {
