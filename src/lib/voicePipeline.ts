@@ -4,7 +4,7 @@
  * Lives outside React so it keeps running on every page (see VoiceRuntime).
  */
 
-import { api, reportError } from "@/services/tauri";
+import { api, logInfo, reportError } from "@/services/tauri";
 import { useChatStore } from "@/stores/chat";
 import { useVoiceStore } from "@/stores/voice";
 import type { CallStatus } from "@/types/generated/CallStatus";
@@ -340,6 +340,11 @@ export async function startWakeListening(): Promise<void> {
         .then(async (text) => {
           const prefs = useVoiceStore.getState().prefs;
           let cmd = stripWakeWord(text, prefs.wake_words);
+          // What «Всегда слушает» heard and why it acted or not — for debugging from the log.
+          logInfo(
+            "wake",
+            `${(utterance.length / sampleRate).toFixed(1)} s «${text.slice(0, 120)}» → ${cmd === null ? "без обращения" : `«${cmd}»`}`,
+          );
           // Right after «Я здесь, сэр» the phrase is addressed to us even without the wake word.
           if (cmd === null && Date.now() < followUntil && text.trim()) cmd = text;
           followUntil = 0;

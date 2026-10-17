@@ -137,12 +137,21 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/** Write a webview-side note into the application log at info level. */
+export function logInfo(kind: string, message: string): void {
+  writeLog(3, kind, message);
+}
+
 /** Write a webview-side error into the application log (tauri-plugin-log). */
 export function reportError(kind: string, message: string): void {
+  writeLog(5, kind, message);
+}
+
+function writeLog(level: number, kind: string, message: string): void {
   if (!isTauri()) return;
   const where = typeof location !== "undefined" ? location.hash || "/" : "";
   invoke("plugin:log|log", {
-    level: 5,
+    level,
     message: `[webview ${where}] ${kind}: ${message}`,
     location: null,
     file: null,

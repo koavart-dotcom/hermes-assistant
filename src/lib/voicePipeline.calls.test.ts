@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/services/tauri", () => ({ api: {}, reportError: vi.fn() }));
+vi.mock("@/services/tauri", () => ({ api: {}, reportError: vi.fn(), logInfo: vi.fn() }));
 
 import { applyCallStatus, inCall, resetCallState } from "@/lib/voicePipeline";
 import { DEFAULT_PREFS, useVoiceStore } from "@/stores/voice";

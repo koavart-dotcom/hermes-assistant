@@ -14,6 +14,12 @@ export interface SegmenterOptions {
   maxMs: number;
   /** Audio kept from before speech started (ms). */
   preRollMs: number;
+  /**
+   * Speech must be this many times louder than the background (a video or music
+   * playing in the room): the noise floor follows steady sound within seconds, so
+   * a pause in Artem's speech still closes the segment.
+   */
+  floorRatio: number;
 }
 
 export const DEFAULT_SEGMENTER: SegmenterOptions = {
@@ -22,6 +28,7 @@ export const DEFAULT_SEGMENTER: SegmenterOptions = {
   silenceMs: 800,
   maxMs: 12_000,
   preRollMs: 300,
+  floorRatio: 2.5,
 };
 
 export function rms(frame: Float32Array): number {
@@ -42,6 +49,8 @@ export class Segmenter {
   private speechMs = 0;
   private silenceMs = 0;
   private open = false;
+  /** Background loudness estimate (RMS): falls fast to quiet, rises slowly under steady sound. */
+  private floor = 0;
 
   constructor(sampleRate: number, opts: Partial<SegmenterOptions> = {}) {
     this.sampleRate = sampleRate;
@@ -64,9 +73,22 @@ export class Segmenter {
     this.open = false;
   }
 
+  /** Current speech threshold: the fixed minimum or `floorRatio` × background, whichever is higher. */
+  get threshold(): number {
+    return Math.max(this.opts.threshold, this.floor * this.opts.floorRatio);
+  }
+
   push(frame: Float32Array): Float32Array | null {
     const ms = (frame.length / this.sampleRate) * 1000;
-    const loud = rms(frame) >= this.opts.threshold;
+    const level = rms(frame);
+    const loud = level >= this.threshold;
+    // Quiet frames pull the floor down within ~0.5 s; steady sound lifts it over ~4 s.
+    // During the first 5 s of a phrase it only falls — a command is shorter, and Artem's
+    // own sentence must not become «background»; a video that keeps a segment open longer
+    // starts lifting it, so the next pause closes the segment.
+    const openMs = (this.currentSamples / this.sampleRate) * 1000;
+    if (level < this.floor) this.floor += (level - this.floor) * Math.min(1, ms / 500);
+    else if (!this.open || openMs > 5000) this.floor += (level - this.floor) * Math.min(1, ms / 4000);
     if (!this.open) {
       this.preRoll.push(frame);
       this.preRollSamples += frame.length;
@@ -129,9 +151,11 @@ function levenshtein(a: string, b: string): number {
 }
 
 /**
- * If the utterance starts with a wake word (tolerating one or two
- * misheard letters), return the command that follows (may be empty);
- * otherwise null.
+ * Find the wake word and return the command after it (may be empty); null without it.
+ * First word: one or two misheard letters are tolerated. Later in the phrase (a video or
+ * a conversation was recorded first: «…джарвис, поставь на паузу») — the last wake word
+ * counts, with at most one misheard letter and only when a command follows it, so a
+ * sentence that merely ends with «джарвис» does not trigger.
  */
 export function stripWakeWord(text: string, wakeWords: string[] = WAKE_WORDS): string | null {
   const words = text
@@ -141,8 +165,11 @@ export function stripWakeWord(text: string, wakeWords: string[] = WAKE_WORDS): s
     .split(/\s+/)
     .filter(Boolean);
   if (words.length === 0) return null;
-  const first = words[0]!;
-  const hit = wakeWords.some((w) => first === w || (first.length >= 5 && levenshtein(first, w) <= 2));
-  if (!hit) return null;
-  return words.slice(1).join(" ");
+  const isWake = (word: string, maxDistance: number) =>
+    wakeWords.some((w) => word === w || (word.length >= 5 && levenshtein(word, w) <= maxDistance));
+  if (isWake(words[0]!, 2)) return words.slice(1).join(" ");
+  for (let i = words.length - 2; i >= 1; i--) {
+    if (isWake(words[i]!, 1)) return words.slice(i + 1).join(" ");
+  }
+  return null;
 }

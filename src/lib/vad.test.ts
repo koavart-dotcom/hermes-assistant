@@ -46,6 +46,38 @@ describe("segmenter", () => {
     expect(out).not.toBeNull();
     expect(rms(frame(4, 0.5))).toBeCloseTo(0.5);
   });
+
+  it("adapts to steady background sound: a pause in speech still closes the segment", () => {
+    const sr = 16_000;
+    const step = 1600; // 100 ms
+    const seg = new Segmenter(sr, { threshold: 0.02, minSpeechMs: 200, silenceMs: 500, maxMs: 12_000 });
+    // A video starts playing (louder than the fixed threshold): it opens a segment, and
+    // after 5 s the floor catches up, so that segment closes on its own well before 12 s.
+    let videoSegment: Float32Array | null = null;
+    for (let i = 0; i < 120 && !videoSegment; i++) videoSegment = seg.push(frame(step, 0.05));
+    expect(videoSegment).not.toBeNull();
+    expect(videoSegment!.length).toBeLessThan(11 * sr);
+    for (let i = 0; i < 30; i++) seg.push(frame(step, 0.05)); // more video: no new segment
+    expect(seg.isOpen).toBe(false);
+    expect(seg.threshold).toBeGreaterThan(0.05); // above the background level
+    // Artem speaks over it for 1 s, then only the video again.
+    for (let i = 0; i < 10; i++) seg.push(frame(step, 0.4));
+    expect(seg.isOpen).toBe(true);
+    let closed: Float32Array | null = null;
+    for (let i = 0; i < 10 && !closed; i++) closed = seg.push(frame(step, 0.05));
+    expect(closed).not.toBeNull(); // closed by the pause, not by the 12 s cap
+    expect(closed!.length).toBeLessThan(2 * sr);
+  });
+
+  it("does not cut a long phrase in the middle", () => {
+    const sr = 16_000;
+    const seg = new Segmenter(sr, { threshold: 0.02, minSpeechMs: 200, silenceMs: 500, maxMs: 12_000 });
+    for (let i = 0; i < 20; i++) seg.push(frame(1600, 0.001));
+    let out: Float32Array | null = null;
+    for (let i = 0; i < 50 && !out; i++) out = seg.push(frame(1600, 0.3)); // 5 s of steady talking
+    expect(out).toBeNull();
+    expect(seg.isOpen).toBe(true);
+  });
 });
 
 describe("wake word", () => {
@@ -61,5 +93,12 @@ describe("wake word", () => {
     expect(stripWakeWord("открой браузер")).toBeNull();
     expect(stripWakeWord("")).toBeNull();
     expect(stripWakeWord("это был не вызов джарвис")).toBeNull();
+    expect(stripWakeWord("налей чай в термос и пойдём")).toBeNull();
+  });
+
+  it("finds the wake word after background speech", () => {
+    expect(stripWakeWord("и вот в этом видео автор говорит Джарвис, поставь на паузу")).toBe("поставь на паузу");
+    expect(stripWakeWord("музыка играет гермес тише")).toBe("тише");
+    expect(stripWakeWord("джарвис скажи джарвис открой браузер")).toBe("скажи джарвис открой браузер");
   });
 });
