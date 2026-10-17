@@ -1,0 +1,26 @@
+{
+  "name": "hermes-bridge",
+  "displayName": "Hermes Bridge",
+  "description": "Gives the Hermes assistant (Jarvis) hands in VS Code over a local MCP server: open projects and files, read the active editor and selection, diagnostics, run editor commands.",
+  "version": "0.1.0",
+  "publisher": "koavart",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/koavart-dotcom/hermes-assistant" },
+  "engines": { "vscode": "^1.90.0" },
+  "categories": ["Other"],
+  "extensionKind": ["ui"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "hermesBridge.status", "title": "Hermes Bridge: Status" }
+    ],
+    "configuration": {
+      "title": "Hermes Bridge",
+      "properties": {
+        "hermesBridge.port": { "type": "number", "default": 8656, "description": "Local port of the MCP server (127.0.0.1)." },
+        "hermesBridge.remoteHost": { "type": "string", "default": "dev-artem", "description": "Remote-SSH host for project paths starting with / (empty = local folders)." }
+      }
+    }
+  }
+}

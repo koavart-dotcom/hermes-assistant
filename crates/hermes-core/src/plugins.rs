@@ -231,6 +231,19 @@ mod skill_tests {
         .unwrap();
         assert!(sync_soul(&src, &home).unwrap());
         assert!(!sync_soul(&src, &home).unwrap());
+        // A newer copy of ours is not downgraded.
+        std::fs::write(
+            home.join("SOUL.md"),
+            "<!-- hermes-assistant:soul v2 -->\nновее",
+        )
+        .unwrap();
+        assert!(!sync_soul(&src, &home).unwrap());
+        std::fs::write(
+            home.join("SOUL.md"),
+            "<!-- hermes-assistant:soul v0 -->\nстарее",
+        )
+        .unwrap();
+        assert!(sync_soul(&src, &home).unwrap());
         std::fs::write(home.join("SOUL.md"), "Мой собственный характер").unwrap();
         assert!(!sync_soul(&src, &home).unwrap());
         assert_eq!(
