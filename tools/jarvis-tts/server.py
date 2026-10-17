@@ -116,6 +116,7 @@ def serve() -> None:
         time.sleep(30)
         if IDLE_MIN > 0 and time.time() - state["last"] > IDLE_MIN * 60 and state["lock"].acquire(blocking=False):
             print(f"idle for {IDLE_MIN:g} min, unloading", flush=True)
+            httpd.shutdown()  # stop serve_forever first, otherwise its thread dies with a traceback
             httpd.server_close()
             os._exit(0)
 
