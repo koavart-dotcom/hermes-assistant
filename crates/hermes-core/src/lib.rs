@@ -3,6 +3,7 @@
 
 pub mod autostart;
 pub mod bootstrap;
+pub mod calendar;
 pub mod chat;
 pub mod cli;
 pub mod control;
@@ -13,6 +14,8 @@ pub mod events;
 pub mod freescout;
 pub mod gateway;
 pub mod hermes_config;
+pub mod jira;
+pub mod mail;
 pub mod models;
 pub mod ollama;
 pub mod paths;

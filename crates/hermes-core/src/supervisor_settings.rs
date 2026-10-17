@@ -56,13 +56,59 @@ fn count_wavs(dir: &std::path::Path) -> usize {
 }
 
 impl Supervisor {
-    /// Build the helpdesk digest now; send it to Telegram when asked and configured.
+    /// Build the morning briefing now (calendar, mail, Jira, helpdesk — whatever
+    /// is configured); send it to Telegram when asked and configured.
     pub async fn digest_run(&self, telegram: bool) -> Result<crate::digest::DigestResult> {
-        let snap = self.freescout_tickets().await?;
-        let text = crate::digest::build_text(&snap, 8);
-        let spoken = crate::digest::build_spoken(&snap);
+        let layout = &self.ctx.layout;
+        let now = chrono::Local::now();
+        let cal_urls = crate::calendar::urls(layout);
+        let txt = |e: CoreError| e.to_string();
+        let tickets = async {
+            match crate::freescout::config(layout) {
+                Ok(Some(_)) => Some(self.freescout_tickets().await.map_err(txt)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e.to_string())),
+            }
+        };
+        let events = async {
+            if cal_urls.is_empty() {
+                None
+            } else {
+                Some(
+                    crate::calendar::events_on(&cal_urls, now.date_naive())
+                        .await
+                        .map_err(txt),
+                )
+            }
+        };
+        let mail = async {
+            match crate::mail::credentials(layout) {
+                Some(c) => Some(crate::mail::summary(&c).await.map_err(txt)),
+                None => None,
+            }
+        };
+        let jira = async {
+            match crate::jira::config(layout) {
+                Some(c) => Some(crate::jira::my_open(&c).await.map_err(txt)),
+                None => None,
+            }
+        };
+        let (tickets, events, mail, jira) = tokio::join!(tickets, events, mail, jira);
+        let b = crate::digest::Briefing {
+            events,
+            mail,
+            jira,
+            tickets,
+        };
+        if b.events.is_none() && b.mail.is_none() && b.jira.is_none() && b.tickets.is_none() {
+            return Err(CoreError::Other(
+                "Сводке не из чего собираться: задайте ключи календаря, почты, Jira или FreeScout в «Настройки → Интеграции и ключи»".into(),
+            ));
+        }
+        let text = crate::digest::briefing_text(&b, &now.format("%d.%m.%Y").to_string());
+        let spoken = crate::digest::briefing_spoken(&b);
         let (telegram_sent, telegram_error) = if telegram {
-            match crate::digest::telegram_target(&self.ctx.layout) {
+            match crate::digest::telegram_target(layout) {
                 Some(t) => match crate::digest::send_telegram(&t, &text).await {
                     Ok(()) => (true, None),
                     Err(e) => (false, Some(e.to_string())),
@@ -77,10 +123,29 @@ impl Supervisor {
         } else {
             (false, None)
         };
+        let state = |o: bool, e: bool| match (o, e) {
+            (false, _) => "-",
+            (true, true) => "err",
+            _ => "ok",
+        };
         log::info!(
-            "digest: mine {} unassigned {} telegram {}",
-            snap.mine.len(),
-            snap.unassigned.len(),
+            "digest: calendar {} mail {} jira {} helpdesk {} telegram {}",
+            state(
+                b.events.is_some(),
+                b.events.as_ref().is_some_and(|r| r.is_err())
+            ),
+            state(
+                b.mail.is_some(),
+                b.mail.as_ref().is_some_and(|r| r.is_err())
+            ),
+            state(
+                b.jira.is_some(),
+                b.jira.as_ref().is_some_and(|r| r.is_err())
+            ),
+            state(
+                b.tickets.is_some(),
+                b.tickets.as_ref().is_some_and(|r| r.is_err())
+            ),
             telegram_sent
         );
         Ok(crate::digest::DigestResult {

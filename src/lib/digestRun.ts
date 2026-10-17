@@ -12,7 +12,7 @@ export async function runDigest(manual = false): Promise<void> {
     const chat = useChatStore.getState();
     let sessionId = chat.activeId;
     if (!sessionId) {
-      const s = await api.chatCreateSession("Сводка хелпдеска");
+      const s = await api.chatCreateSession("Утренняя сводка");
       chat.upsertSession(s);
       chat.setActive(s.id);
       sessionId = s.id;

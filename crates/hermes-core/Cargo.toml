@@ -23,6 +23,13 @@ hex = "0.4"
 dirs = "7"
 axum = "0.8"
 base64 = "0.22"
+# Morning briefing: Google Calendar (secret iCal address), Gmail (IMAP), Jira.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+chrono-tz = "0.10"
+rrule = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-platform-verifier = "0.7"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 log.workspace = true
 
 [target.'cfg(windows)'.dependencies]

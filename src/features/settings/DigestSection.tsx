@@ -57,11 +57,12 @@ export function DigestSection() {
   return (
     <section className="hud-panel mt-6 max-w-xl space-y-3 p-4 text-sm" aria-labelledby="digest-title">
       <h2 id="digest-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-        <CalendarClock className="size-4" /> Сводка хелпдеска
+        <CalendarClock className="size-4" /> Утренняя сводка
       </h2>
       <p className="text-muted-foreground">
-        В указанное время Джарвис собирает заявки FreeScout: озвучивает итог, кладёт список в чат и шлёт в Telegram.
-        Для Telegram нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в «Интеграции и ключи». Приложение должно быть запущено.
+        В указанное время Джарвис собирает встречи Google Calendar, непрочитанную почту Gmail, задачи Jira и заявки FreeScout:
+        озвучивает итог, кладёт список в чат и шлёт в Telegram. Источники подключаются ключами в «Интеграции и ключи» —
+        ненастроенные просто пропускаются. Для Telegram нужны TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID. Приложение должно быть запущено.
       </p>
       {!enabled ? <p className="text-muted-foreground">Доступно только внутри приложения.</p> : null}
       {d ? (

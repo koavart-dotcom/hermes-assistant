@@ -88,8 +88,12 @@ tts_voice}`, перезапуск сервера голоса), `GET /speech/tts
 доступные для импорта из Luxify), `POST /voice/packs/import {name}`. `hermesctl prefs|models|model|model-set|model-pull|
 speech|speech-set|voice-packs|voice-pack-import`.
 
-**Сводка хелпдеска (с v0.16.0):** `POST /digest/run {telegram}` → `DigestResult` `{text, spoken, telegram_sent,
-telegram_error}` — текст для чата/Telegram и фраза для озвучки из текущих заявок FreeScout; при `telegram: true`
+**Утренняя сводка (с v0.16.0, источники — с v0.23.0):** `POST /digest/run {telegram}` → `DigestResult` `{text, spoken, telegram_sent,
+telegram_error}` — текст для чата/Telegram и фраза для озвучки. С v0.23.0 это утренняя сводка: встречи на сегодня
+из Google Calendar (`GOOGLE_CALENDAR_ICS_URL` — секретный адрес iCal, повторы через `rrule`), непрочитанная почта Gmail
+(`GMAIL_ADDRESS` + `GMAIL_APP_PASSWORD`, IMAP `EXAMINE` — письма не помечаются прочитанными), открытые задачи Jira
+(`JIRA_USER` + `JIRA_API_TOKEN`, `JIRA_SITES`) и заявки FreeScout; ненастроенный источник пропускается, упавший — строка
+«⚠️» в тексте, остальные уходят; при `telegram: true`
 отправка через Bot API (`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` или первый из `TELEGRAM_ALLOWED_USERS` в `.env`).
 Расписание (`prefs.digest`: enabled, times `HH:MM`, speak, telegram) исполняет главное окно приложения по местному
 времени. `hermesctl digest [true]`.

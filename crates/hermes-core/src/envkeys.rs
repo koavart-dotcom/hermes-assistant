@@ -43,6 +43,24 @@ pub fn presets() -> Vec<EnvPreset> {
             "Адрес вида https://helpdesk.example.com, ключ API из настроек FreeScout и ваш id пользователя (для фильтра «мои тикеты»).",
         ),
         p(
+            "google_calendar",
+            "Google Calendar (утренняя сводка)",
+            &["GOOGLE_CALENDAR_ICS_URL"],
+            "Google Календарь → Настройки → ваш календарь → «Секретный адрес в формате iCal». Несколько календарей — через запятую. Только чтение.",
+        ),
+        p(
+            "gmail",
+            "Gmail (утренняя сводка)",
+            &["GMAIL_ADDRESS", "GMAIL_APP_PASSWORD"],
+            "Адрес и пароль приложения: аккаунт Google → Безопасность → Двухэтапная аутентификация → Пароли приложений. Почта только читается, письма не помечаются прочитанными.",
+        ),
+        p(
+            "jira",
+            "Jira (утренняя сводка)",
+            &["JIRA_USER", "JIRA_API_TOKEN", "JIRA_SITES"],
+            "E-mail в Atlassian и API-токен (id.atlassian.com → Security → API tokens). JIRA_SITES необязателен: по умолчанию deka-admin, deka-dev, deka.",
+        ),
+        p(
             "telegram",
             "Telegram-бот",
             &["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"],
@@ -175,6 +193,16 @@ fn read(path: &Path) -> Result<String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
         Err(e) => Err(e.into()),
     }
+}
+
+/// One variable from Hermes' `.env` (trimmed, empty → `None`).
+pub fn value(layout: &Layout, name: &str) -> Option<String> {
+    let text = std::fs::read_to_string(layout.env_file()).ok()?;
+    parse(&text)
+        .into_iter()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 pub fn list(layout: &Layout) -> Result<Vec<EnvKey>> {
