@@ -25,8 +25,8 @@ export interface SegmenterOptions {
 export const DEFAULT_SEGMENTER: SegmenterOptions = {
   threshold: 0.02,
   minSpeechMs: 200,
-  silenceMs: 800,
-  maxMs: 12_000,
+  silenceMs: 600,
+  maxMs: 10_000,
   preRollMs: 300,
   floorRatio: 2.5,
 };

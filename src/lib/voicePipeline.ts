@@ -308,9 +308,87 @@ export async function pttStop(): Promise<void> {
 
 // --------------------------------------------------------- always listening --
 
+/** Thinking or speaking: the microphone is ignored (avoids hearing ourselves). */
 let busy = false;
 /** Ignore the microphone until this time (ms) — set when an answer finishes playing. */
 let quietUntil = 0;
+/** Whisper is working on a segment; the microphone keeps segmenting meanwhile. */
+let transcribing = false;
+/** The newest segment heard while Whisper was busy (older ones are dropped: they are background). */
+let pending: { samples: Float32Array; sampleRate: number; closedAt: number } | null = null;
+
+/** Transcribe heard segments one by one; a phrase said during a transcription is not lost. */
+async function drainHeard(): Promise<void> {
+  if (transcribing) return;
+  transcribing = true;
+  try {
+    while (pending && !busy) {
+      const seg = pending;
+      pending = null;
+      useVoiceStore.getState().setPhase("transcribing");
+      try {
+        await onHeard(seg.samples, seg.sampleRate, seg.closedAt);
+      } catch (e) {
+        useVoiceStore.getState().setError(errorText(e));
+      }
+      if (!busy && !pending) {
+        const st = useVoiceStore.getState();
+        if (st.phase === "transcribing") st.setPhase("listening");
+      }
+    }
+  } finally {
+    transcribing = false;
+  }
+}
+
+async function onHeard(utterance: Float32Array, sampleRate: number, closedAt: number): Promise<void> {
+  const text = await transcribeSamples(utterance, sampleRate);
+  const prefs = useVoiceStore.getState().prefs;
+  let cmd = stripWakeWord(text, prefs.wake_words);
+  // What «Всегда слушает» heard, how long Whisper took and why it acted or not — for debugging from the log.
+  logInfo(
+    "wake",
+    `${(utterance.length / sampleRate).toFixed(1)} s, stt ${Date.now() - closedAt} ms «${text.slice(0, 120)}» → ${cmd === null ? "без обращения" : `«${cmd}»`}`,
+  );
+  // Right after «Я здесь, сэр» the phrase is addressed to us even without the wake word.
+  if (cmd === null && Date.now() < followUntil && text.trim()) cmd = text;
+  followUntil = 0;
+  if (useVoiceStore.getState().quiet) {
+    // Quiet mode: only the phrase that ends it is honoured.
+    const q = await api.quickMatch(cmd ?? text);
+    if (q?.id === "voice.quiet_off") await act(() => handleUtterance(cmd ?? text));
+    return;
+  }
+  if (cmd === null) {
+    // Without the wake word only quick commands may run (if allowed in settings).
+    if (!prefs.wake_required && text.trim()) {
+      const q = await api.quickMatch(text);
+      if (q && !q.needs_confirm) {
+        if (q.stops_speech) stopSpeaking();
+        const r = await api.quickRun(q.id, false, q.query);
+        useVoiceStore.getState().setTranscript(text);
+        useVoiceStore.getState().setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
+        if (r.ui) await showUi(r.ui);
+      }
+    }
+    return;
+  }
+  // A bare «Джарвис» works like «Джарвис, ты тут?»: a reply clip and a follow-up window.
+  const started = Date.now();
+  await act(() => handleUtterance(cmd || "ты тут"));
+  logInfo("wake", `handled in ${Date.now() - started} ms (${Date.now() - closedAt} ms after the phrase ended)`);
+}
+
+/** Run a command with the microphone muted; whatever was queued meanwhile is our own voice or stale. */
+async function act(run: () => Promise<void>): Promise<void> {
+  busy = true;
+  try {
+    await run();
+  } finally {
+    pending = null;
+    busy = false;
+  }
+}
 
 export async function startWakeListening(): Promise<void> {
   if (mic || call.active) return;
@@ -321,9 +399,8 @@ export async function startWakeListening(): Promise<void> {
       segmenter ??= new Segmenter(sampleRate);
       const st = useVoiceStore.getState();
       if (st.phase === "listening" || st.phase === "recording") st.setLevel(rms(frame) * 4);
-      if (busy) return; // ignore audio while we transcribe/think/speak (avoids hearing ourselves)
-      // Echo guard: our own answer (and its tail in the room) must not open a new utterance.
-      if (st.phase === "speaking" || Date.now() < quietUntil) {
+      // Echo guard: while we think/speak (and the answer's tail in the room) nothing opens a segment.
+      if (busy || st.phase === "speaking" || Date.now() < quietUntil) {
         segmenter.reset();
         return;
       }
@@ -331,55 +408,11 @@ export async function startWakeListening(): Promise<void> {
       if (st.phase === "listening" && segmenter.isOpen) st.setPhase("recording");
       if (!utterance) return;
       if (utterance.length / sampleRate < MIN_UTTERANCE_SEC) {
-        st.setPhase("listening");
+        if (!transcribing) st.setPhase("listening");
         return;
       }
-      busy = true;
-      st.setPhase("transcribing");
-      transcribeSamples(utterance, sampleRate)
-        .then(async (text) => {
-          const prefs = useVoiceStore.getState().prefs;
-          let cmd = stripWakeWord(text, prefs.wake_words);
-          // What «Всегда слушает» heard and why it acted or not — for debugging from the log.
-          logInfo(
-            "wake",
-            `${(utterance.length / sampleRate).toFixed(1)} s «${text.slice(0, 120)}» → ${cmd === null ? "без обращения" : `«${cmd}»`}`,
-          );
-          // Right after «Я здесь, сэр» the phrase is addressed to us even without the wake word.
-          if (cmd === null && Date.now() < followUntil && text.trim()) cmd = text;
-          followUntil = 0;
-          if (useVoiceStore.getState().quiet) {
-            // Quiet mode: only the phrase that ends it is honoured.
-            const q = await api.quickMatch(cmd ?? text);
-            if (q?.id === "voice.quiet_off") await handleUtterance(cmd ?? text);
-            else useVoiceStore.getState().setPhase("listening");
-            return;
-          }
-          if (cmd === null) {
-            // Without the wake word only quick commands may run (if allowed in settings).
-            if (!prefs.wake_required && text.trim()) {
-              const q = await api.quickMatch(text);
-              if (q && !q.needs_confirm) {
-                if (q.stops_speech) stopSpeaking();
-                const r = await api.quickRun(q.id, false, q.query);
-                useVoiceStore.getState().setTranscript(text);
-                useVoiceStore.getState().setAnswer(r.ok ? `⚡ ${r.name}` : `Команда «${r.name}» не выполнена: ${r.error ?? ""}`);
-                if (r.ui) await showUi(r.ui);
-              }
-            }
-            useVoiceStore.getState().setPhase("listening");
-            return;
-          }
-          // A bare «Джарвис» works like «Джарвис, ты тут?»: a reply clip and a follow-up window.
-          await handleUtterance(cmd || "ты тут");
-        })
-        .catch((e) => {
-          useVoiceStore.getState().setError(errorText(e));
-          useVoiceStore.getState().setPhase("listening");
-        })
-        .finally(() => {
-          busy = false;
-        });
+      pending = { samples: utterance, sampleRate, closedAt: Date.now() };
+      void drainHeard();
     });
     v.setPhase("listening");
     v.setError(null);
