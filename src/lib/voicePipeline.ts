@@ -106,7 +106,8 @@ export async function handleUtterance(text: string): Promise<void> {
       if (r.ok && r.handoff) await sendToChat(text, r.handoff);
       return;
     }
-    await sendToChat(text, text);
+    // The persona answers «[голос]» messages briefly and without Markdown (they are spoken).
+    await sendToChat(text, `[голос] ${text}`);
   } catch (e) {
     v.setError(errorText(e));
     v.setPhase(idlePhase());
@@ -202,6 +203,7 @@ export async function speakAnswer(content: string): Promise<void> {
     audio = a;
     watchSpeechLevel(a);
     const done = () => {
+      quietUntil = Date.now() + 700;
       if (audio === a) {
         audio = null;
         stopSpeechLevel();
@@ -276,6 +278,8 @@ export async function pttStop(): Promise<void> {
 // --------------------------------------------------------- always listening --
 
 let busy = false;
+/** Ignore the microphone until this time (ms) — set when an answer finishes playing. */
+let quietUntil = 0;
 
 export async function startWakeListening(): Promise<void> {
   if (mic) return;
@@ -287,6 +291,11 @@ export async function startWakeListening(): Promise<void> {
       const st = useVoiceStore.getState();
       if (st.phase === "listening" || st.phase === "recording") st.setLevel(rms(frame) * 4);
       if (busy) return; // ignore audio while we transcribe/think/speak (avoids hearing ourselves)
+      // Echo guard: our own answer (and its tail in the room) must not open a new utterance.
+      if (st.phase === "speaking" || Date.now() < quietUntil) {
+        segmenter.reset();
+        return;
+      }
       const utterance = segmenter.push(frame);
       if (st.phase === "listening" && segmenter.isOpen) st.setPhase("recording");
       if (!utterance) return;

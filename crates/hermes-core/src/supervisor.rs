@@ -268,7 +268,15 @@ impl Supervisor {
         if !layout.bootstrap_marker().exists() {
             return Ok(Vec::new());
         }
-        let updated = crate::plugins::sync_all_skills(&self.ctx.skills_dir, &layout.hermes_home)?;
+        let mut updated =
+            crate::plugins::sync_all_skills(&self.ctx.skills_dir, &layout.hermes_home)?;
+        // Persona ships next to the skills: resources/hermes-skills/../hermes-persona/SOUL.md
+        if let Some(res) = self.ctx.skills_dir.parent() {
+            let soul = res.join("hermes-persona").join("SOUL.md");
+            if soul.is_file() && crate::plugins::sync_soul(&soul, &layout.hermes_home)? {
+                updated.push("SOUL.md".into());
+            }
+        }
         if !updated.is_empty() {
             log::info!("skills updated: {}", updated.join(", "));
         }

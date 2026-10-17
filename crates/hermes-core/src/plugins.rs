@@ -107,6 +107,33 @@ pub fn sync_all_skills(skills_dir: &Path, hermes_home: &Path) -> Result<Vec<Stri
     Ok(updated)
 }
 
+/// Marker of the SOUL.md we ship; files without it were written by the user (or are the Hermes default).
+pub const SOUL_MARKER: &str = "<!-- hermes-assistant:soul ";
+
+/// Install our persona as `$HERMES_HOME/SOUL.md` when the current file is the Hermes default
+/// ("You are Hermes Agent, built by Nous Research…"), missing, or an older unedited copy of ours.
+/// A file the user changed (no marker, not the default) is left alone. Returns whether it wrote.
+pub fn sync_soul(src: &Path, hermes_home: &Path) -> Result<bool> {
+    let ours = std::fs::read_to_string(src)?;
+    let dest = hermes_home.join("SOUL.md");
+    let current = std::fs::read_to_string(&dest).unwrap_or_default();
+    if current == ours {
+        return Ok(false);
+    }
+    let is_default = current.trim().is_empty()
+        || current.starts_with("You are Hermes Agent, built by Nous Research");
+    let first_line = |s: &str| s.lines().next().unwrap_or("").to_string();
+    // Ours, older version, untouched below the header: safe to replace.
+    let is_ours_unedited =
+        current.starts_with(SOUL_MARKER) && first_line(&current) != first_line(&ours);
+    if !(is_default || is_ours_unedited) {
+        return Ok(false);
+    }
+    std::fs::create_dir_all(hermes_home)?;
+    std::fs::write(&dest, ours)?;
+    Ok(true)
+}
+
 pub fn log_path(layout: &Layout) -> PathBuf {
     layout.hermes_home.join(LOG_FILE)
 }
@@ -187,6 +214,31 @@ mod tests {
 #[cfg(test)]
 mod skill_tests {
     use super::*;
+
+    #[test]
+    fn soul_replaces_default_but_not_user_edits() {
+        let root = std::env::temp_dir().join(format!("hermes-soul-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let src = root.join("SOUL.src.md");
+        std::fs::write(&src, "<!-- hermes-assistant:soul v1 -->\nТы — Джарвис.").unwrap();
+        let home = root.join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            home.join("SOUL.md"),
+            "You are Hermes Agent, built by Nous Research. Be direct.",
+        )
+        .unwrap();
+        assert!(sync_soul(&src, &home).unwrap());
+        assert!(!sync_soul(&src, &home).unwrap());
+        std::fs::write(home.join("SOUL.md"), "Мой собственный характер").unwrap();
+        assert!(!sync_soul(&src, &home).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(home.join("SOUL.md")).unwrap(),
+            "Мой собственный характер"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn skills_are_copied_and_reported_once() {

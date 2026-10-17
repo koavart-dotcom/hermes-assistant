@@ -53,6 +53,17 @@ export class Segmenter {
   }
 
   /** Returns a finished utterance or null. */
+  /** Drop everything buffered (used while our own voice is playing). */
+  reset(): void {
+    this.preRoll = [];
+    this.preRollSamples = 0;
+    this.current = [];
+    this.currentSamples = 0;
+    this.speechMs = 0;
+    this.silenceMs = 0;
+    this.open = false;
+  }
+
   push(frame: Float32Array): Float32Array | null {
     const ms = (frame.length / this.sampleRate) * 1000;
     const loud = rms(frame) >= this.opts.threshold;

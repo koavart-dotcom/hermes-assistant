@@ -25,6 +25,15 @@ describe("segmenter", () => {
     expect(seg.isOpen).toBe(false);
   });
 
+  it("reset drops an open segment", () => {
+    const seg = new Segmenter(16_000, { threshold: 0.02, minSpeechMs: 100, silenceMs: 300 });
+    seg.push(frame(1600, 0.2));
+    expect(seg.isOpen).toBe(true);
+    seg.reset();
+    expect(seg.isOpen).toBe(false);
+    expect(seg.push(frame(1600, 0.001))).toBeNull();
+  });
+
   it("ignores short blips and caps long segments", () => {
     const sr = 16_000;
     const seg = new Segmenter(sr, { threshold: 0.02, minSpeechMs: 200, silenceMs: 500, maxMs: 1000 });
