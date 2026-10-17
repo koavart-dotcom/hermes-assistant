@@ -31,6 +31,7 @@ function watchSpeechLevel(a: HTMLAudioElement): void {
   stopSpeechLevel();
   try {
     audioCtx ??= new AudioContext();
+    if (audioCtx.state !== "running") void audioCtx.resume();
     const src = audioCtx.createMediaElementSource(a);
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 512;
@@ -208,9 +209,15 @@ export async function speakAnswer(content: string): Promise<void> {
       }
     };
     a.onended = done;
-    a.onerror = done;
+    a.onerror = () => {
+      const err = a.error ? `${a.error.code} ${a.error.message}` : "unknown";
+      reportError("speak", `audio element error: ${err} (url ${url.slice(0, 30)}…, ${url.length} chars)`);
+      v.setError(`Озвучка: плеер не смог воспроизвести ответ (${err})`);
+      done();
+    };
     await a.play();
   } catch (e) {
+    reportError("speak", errorText(e));
     v.setError(`Озвучка: ${errorText(e)}`);
     v.setPhase(idlePhase());
   }
