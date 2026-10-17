@@ -201,6 +201,13 @@ pub fn tts_options() -> Vec<TtsProviderOption> {
     };
     vec![
         p(
+            "jarvis",
+            "Джарвис (локально, клон голоса XTTS)",
+            &["Jarvis"],
+            "",
+            "Голос Джарвиса по образцам из набора реакций, на видеокарте. Ставится отдельно: tools/jarvis-tts/install.ps1.",
+        ),
+        p(
             "piper",
             "Piper (офлайн)",
             &[
@@ -269,6 +276,7 @@ pub fn current_speech(layout: &Layout) -> SpeechSettings {
     let t = read_config(layout);
     let tts_provider = yaml_get(&t, &["tts", "provider"]).unwrap_or_else(|| "piper".into());
     let voice_key: &[&str] = match tts_provider.as_str() {
+        "jarvis" => &["tts", "providers", "jarvis", "voice"],
         "piper" => &["tts", "piper", "voice"],
         "edge" => &["tts", "edge", "voice"],
         "openai" => &["tts", "openai", "voice"],
@@ -340,6 +348,7 @@ pub async fn apply_speech(layout: &Layout, s: &SpeechSettings) -> Result<()> {
         )));
     }
     let voice_key = match s.tts_provider.as_str() {
+        "jarvis" => "tts.providers.jarvis.voice",
         "piper" => "tts.piper.voice",
         "edge" => "tts.edge.voice",
         "openai" => "tts.openai.voice",
