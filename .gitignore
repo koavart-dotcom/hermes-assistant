@@ -22,3 +22,6 @@ __pycache__/
 
 # VS Code extension packages
 *.vsix
+
+# Vosk DLLs are fetched by the release workflow
+src-tauri/resources/vosk/*.dll

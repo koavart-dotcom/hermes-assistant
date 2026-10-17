@@ -26,6 +26,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: pnpm install --frozen-lockfile
+      # Vosk engine for the fast wake word / quick commands: shipped in the installer so the
+      # app never downloads executable code (Defender ML flagged that as a dropper).
+      - name: Bundle Vosk engine
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\vosk.zip"
+          Invoke-WebRequest https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip -OutFile $zip
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($sha -ne "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b") { throw "vosk zip checksum mismatch: $sha" }
+          Expand-Archive $zip "$env:RUNNER_TEMP\vosk"
+          Copy-Item "$env:RUNNER_TEMP\vosk\vosk-win64-0.3.45\*.dll" src-tauri/resources/vosk/
+          Get-ChildItem src-tauri/resources/vosk
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

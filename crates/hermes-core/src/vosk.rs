@@ -4,9 +4,11 @@
 //! after the phrase has ended. Whisper stays for everything that goes to the model.
 //!
 //! The window streams 16 kHz PCM16 to [`feed`]; the engine is `libvosk.dll` (official
-//! vosk-api build, MinGW) loaded at runtime with `libloading`, so nothing is linked at
-//! build time. Both the DLLs and the model are fetched once into
-//! `<app data>/vosk` and checked against pinned SHA-256 sums.
+//! vosk-api 0.3.45 build, MinGW) shipped inside the installer (`resources/vosk`, put
+//! there by the release workflow) and loaded with `libloading`, so nothing is linked at
+//! build time. The app never downloads executable code: an exe that fetches and loads a
+//! DLL looked like a dropper to Defender's ML (`Trojan:Win32/Bearfoos.B!ml`, 17.10.2026).
+//! Only the model (data) is fetched once into `<app data>/vosk`, checked by SHA-256.
 
 use std::path::{Path, PathBuf};
 
@@ -20,10 +22,11 @@ use crate::{CoreError, Layout, Result};
 pub const MODEL: &str = "vosk-model-small-ru-0.22";
 const MODEL_URL: &str = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip";
 const MODEL_SHA256: &str = "961d5ff98a17f4aa6de69864d0aa71fa5bac682301d2b5d17a3f24c5c99a46d4";
-const LIB_URL: &str =
-    "https://github.com/alphacep/vosk-api/releases/download/v0.3.45/vosk-win64-0.3.45.zip";
-const LIB_SHA256: &str = "f1dcc9cca460630f81ea8f71794f69c80bed6556d2a4e6237b5785e1d2dff34b";
 pub const SAMPLE_RATE: f32 = 16_000.0;
+#[cfg(windows)]
+const LIB_FILE: &str = "libvosk.dll";
+#[cfg(not(windows))]
+const LIB_FILE: &str = "libvosk.so";
 
 /// What the recogniser heard after a chunk of audio.
 #[derive(Debug, Clone, Default, Serialize, TS, PartialEq)]
@@ -41,10 +44,6 @@ pub fn dir(layout: &Layout) -> PathBuf {
 
 pub fn model_dir(layout: &Layout) -> PathBuf {
     dir(layout).join(MODEL)
-}
-
-pub fn lib_dir(layout: &Layout) -> PathBuf {
-    dir(layout).join("bin")
 }
 
 fn sha256_hex(path: &Path) -> Result<String> {
@@ -109,27 +108,22 @@ fn unzip(zip_path: &Path, dest: &Path, strip_top: bool) -> Result<()> {
     Ok(())
 }
 
-/// Fetch the engine and the model once (≈15 + 45 MB); a marker file means «complete».
+/// Fetch the model once (≈45 MB); a marker file means «complete».
 pub async fn ensure(layout: &Layout) -> Result<()> {
     let root = dir(layout);
-    tokio::fs::create_dir_all(&root).await?;
-    for (url, sha, target, strip, marker) in [
-        (LIB_URL, LIB_SHA256, lib_dir(layout), true, "bin.ok"),
-        (MODEL_URL, MODEL_SHA256, root.clone(), false, "model.ok"),
-    ] {
-        let marker = root.join(marker);
-        if marker.is_file() {
-            continue;
-        }
-        let zip_path = root.join("download.zip");
-        fetch(url, &zip_path, sha).await?;
-        let (z, t) = (zip_path.clone(), target.clone());
-        tokio::task::spawn_blocking(move || unzip(&z, &t, strip))
-            .await
-            .map_err(|e| CoreError::Other(e.to_string()))??;
-        let _ = tokio::fs::remove_file(&zip_path).await;
-        tokio::fs::write(&marker, sha).await?;
+    let marker = root.join("model.ok");
+    if marker.is_file() {
+        return Ok(());
     }
+    tokio::fs::create_dir_all(&root).await?;
+    let zip_path = root.join("download.zip");
+    fetch(MODEL_URL, &zip_path, MODEL_SHA256).await?;
+    let (z, t) = (zip_path.clone(), root.clone());
+    tokio::task::spawn_blocking(move || unzip(&z, &t, false))
+        .await
+        .map_err(|e| CoreError::Other(e.to_string()))??;
+    let _ = tokio::fs::remove_file(&zip_path).await;
+    tokio::fs::write(&marker, MODEL_SHA256).await?;
     Ok(())
 }
 
@@ -185,7 +179,10 @@ mod engine {
         // Altered search path: libvosk.dll finds libstdc++/libgcc/winpthread next to it.
         // SAFETY: loading the pinned official build.
         unsafe {
-            WinLibrary::load_with_flags(lib_dir.join("libvosk.dll"), LOAD_WITH_ALTERED_SEARCH_PATH)
+            WinLibrary::load_with_flags(
+                lib_dir.join(super::LIB_FILE),
+                LOAD_WITH_ALTERED_SEARCH_PATH,
+            )
         }
         .map(Library::from)
         .map_err(|e| CoreError::Other(format!("libvosk.dll: {e}")))
@@ -194,7 +191,7 @@ mod engine {
     #[cfg(not(windows))]
     fn open(lib_dir: &Path) -> Result<Library> {
         // SAFETY: loading libvosk (development and tests only).
-        unsafe { Library::new(lib_dir.join("libvosk.so")) }
+        unsafe { Library::new(lib_dir.join(super::LIB_FILE)) }
             .map_err(|e| CoreError::Other(format!("libvosk.so: {e}")))
     }
 
@@ -286,12 +283,19 @@ fn lock() -> std::sync::MutexGuard<'static, Option<engine::Engine>> {
 }
 
 /// Download if needed and load the engine (idempotent). Blocking work runs off the async pool.
-pub async fn start(layout: &Layout) -> Result<()> {
+/// `lib_dir` — the bundled `resources/vosk` with `libvosk.dll` and its MinGW runtime.
+pub async fn start(layout: &Layout, lib_dir: &Path) -> Result<()> {
     if lock().is_some() {
         return Ok(());
     }
+    if !lib_dir.join(LIB_FILE).is_file() {
+        return Err(CoreError::Other(format!(
+            "{LIB_FILE} is not bundled in {}",
+            lib_dir.display()
+        )));
+    }
     ensure(layout).await?;
-    let (lib, model) = (lib_dir(layout), model_dir(layout));
+    let (lib, model) = (lib_dir.to_path_buf(), model_dir(layout));
     let engine =
         tokio::task::spawn_blocking(move || engine::Engine::load(&lib, &model, SAMPLE_RATE))
             .await

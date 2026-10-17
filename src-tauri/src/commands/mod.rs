@@ -474,10 +474,16 @@ pub async fn digest_run(
     state.supervisor.digest_run(telegram).await.map_err(err)
 }
 
-/// Fast recogniser for always-listening mode: fetch (once, ≈60 MB) and load Vosk.
+/// Fast recogniser for always-listening mode: fetch the model (once, ≈45 MB) and load the
+/// bundled Vosk engine.
 #[tauri::command]
-pub async fn vosk_start(state: State<'_, AppState>) -> Result<(), String> {
-    hermes_core::vosk::start(&state.supervisor.ctx.layout)
+pub async fn vosk_start(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    use tauri::Manager;
+    let lib_dir = app
+        .path()
+        .resolve("resources/vosk", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    hermes_core::vosk::start(&state.supervisor.ctx.layout, &lib_dir)
         .await
         .map_err(err)
 }
