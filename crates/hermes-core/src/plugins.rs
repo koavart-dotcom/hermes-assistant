@@ -122,10 +122,15 @@ pub fn sync_soul(src: &Path, hermes_home: &Path) -> Result<bool> {
     }
     let is_default = current.trim().is_empty()
         || current.starts_with("You are Hermes Agent, built by Nous Research");
-    let first_line = |s: &str| s.lines().next().unwrap_or("").to_string();
-    // Ours, older version, untouched below the header: safe to replace.
-    let is_ours_unedited =
-        current.starts_with(SOUL_MARKER) && first_line(&current) != first_line(&ours);
+    // Ours with an OLDER version number: safe to replace (never downgrade a newer one).
+    let version = |s: &str| -> u32 {
+        s.strip_prefix(SOUL_MARKER)
+            .and_then(|r| r.strip_prefix('v'))
+            .and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next())
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0)
+    };
+    let is_ours_unedited = current.starts_with(SOUL_MARKER) && version(&current) < version(&ours);
     if !(is_default || is_ours_unedited) {
         return Ok(false);
     }
