@@ -9,6 +9,7 @@ import { useChatStore } from "@/stores/chat";
 import { useVoiceStore } from "@/stores/voice";
 import type { CallStatus } from "@/types/generated/CallStatus";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
+import { FastWake } from "@/lib/fastWake";
 import { Segmenter, rms, stripWakeWord } from "@/lib/vad";
 import { TARGET_RATE, downsample, encodeWav, openMic, setPreferredMic, startRecording, toBase64, type Mic, type Recorder } from "@/lib/wav";
 
@@ -343,6 +344,11 @@ async function drainHeard(): Promise<void> {
 
 async function onHeard(utterance: Float32Array, sampleRate: number, closedAt: number): Promise<void> {
   const text = await transcribeSamples(utterance, sampleRate);
+  // Vosk already acted on this phrase (or is acting right now): Whisper's copy is a duplicate.
+  if (busy || Math.abs(closedAt - fastHandledAt) < 1500) {
+    logInfo("wake", `whisper «${text.slice(0, 80)}» skipped: handled by vosk`);
+    return;
+  }
   const prefs = useVoiceStore.getState().prefs;
   let cmd = stripWakeWord(text, prefs.wake_words);
   // What «Всегда слушает» heard, how long Whisper took and why it acted or not — for debugging from the log.
@@ -386,8 +392,107 @@ async function act(run: () => Promise<void>): Promise<void> {
     await run();
   } finally {
     pending = null;
+    resetFast();
     busy = false;
   }
+}
+
+// ------------------------------------------------- fast path (Vosk) --
+
+/** Vosk is loaded; until then (or if it fails) only Whisper listens. */
+let fastReady = false;
+let fastStarting = false;
+/** When the fast path last ran a command (ms) — Whisper's copy of that phrase is dropped. */
+let fastHandledAt = 0;
+/** 16 kHz PCM16 waiting to be sent; one request in flight at a time. */
+let fastBuf: Int16Array[] = [];
+let fastBufLen = 0;
+let fastInFlight = false;
+/** Vosk has heard audio since the last reset. */
+let fastDirty = false;
+const fastWake = new FastWake({
+  wakeWords: () => useVoiceStore.getState().prefs.wake_words,
+  following: () => Date.now() < followUntil,
+});
+/** ~100 ms per request. */
+const FAST_CHUNK = TARGET_RATE / 10;
+
+function resetFast(): void {
+  fastWake.reset();
+  fastBuf = [];
+  fastBufLen = 0;
+  if (fastDirty && fastReady) void api.voskReset().catch(() => undefined);
+  fastDirty = false;
+}
+
+/** Load Vosk in the background (the first time it downloads ≈60 MB). */
+function startFast(): void {
+  if (fastReady || fastStarting) return;
+  fastStarting = true;
+  const started = Date.now();
+  api
+    .voskStart()
+    .then(() => {
+      fastReady = true;
+      logInfo("wake", `vosk ready in ${Date.now() - started} ms`);
+    })
+    .catch((e) => reportError("vosk", errorText(e)))
+    .finally(() => {
+      fastStarting = false;
+    });
+}
+
+function feedFast(frame: Float32Array, sampleRate: number): void {
+  if (!fastReady) return;
+  const mono = downsample(frame, sampleRate, TARGET_RATE);
+  const pcm = new Int16Array(mono.length);
+  for (let i = 0; i < mono.length; i++) pcm[i] = Math.max(-1, Math.min(1, mono[i]!)) * 0x7fff;
+  fastBuf.push(pcm);
+  fastBufLen += pcm.length;
+  if (fastInFlight || fastBufLen < FAST_CHUNK) return;
+  const chunk = new Int16Array(fastBufLen);
+  let o = 0;
+  for (const b of fastBuf) {
+    chunk.set(b, o);
+    o += b.length;
+  }
+  fastBuf = [];
+  fastBufLen = 0;
+  fastInFlight = true;
+  fastDirty = true;
+  api
+    .voskFeed(new Uint8Array(chunk.buffer))
+    .then((heard) => {
+      if (busy) return;
+      const st = useVoiceStore.getState();
+      if (fastWake.wakeHeard && st.phase === "listening") st.setPhase("recording");
+      const cmd = fastWake.push(heard);
+      if (cmd !== null) void onFastCommand(cmd, heard.text ?? heard.partial);
+    })
+    .catch((e) => {
+      fastReady = false;
+      reportError("vosk", errorText(e));
+    })
+    .finally(() => {
+      fastInFlight = false;
+    });
+}
+
+/** A phrase with the wake word from Vosk: quick commands run now, the rest waits for Whisper. */
+async function onFastCommand(cmd: string, heard: string): Promise<void> {
+  const t0 = Date.now();
+  const st = useVoiceStore.getState();
+  // A bare «Джарвис» — the presence reply right away.
+  const phrase = cmd || "ты тут";
+  const q = await api.quickMatch(phrase);
+  if (busy) return;
+  const allowed = q && !q.needs_confirm && q.query === null && (!st.quiet || q.id === "voice.quiet_off");
+  logInfo("wake", `vosk «${heard}» → ${allowed ? q.id : "whisper"} (${Date.now() - t0} ms)`);
+  if (!allowed) return;
+  fastHandledAt = Date.now();
+  followUntil = 0;
+  pending = null;
+  await act(() => handleUtterance(phrase));
 }
 
 export async function startWakeListening(): Promise<void> {
@@ -402,8 +507,10 @@ export async function startWakeListening(): Promise<void> {
       // Echo guard: while we think/speak (and the answer's tail in the room) nothing opens a segment.
       if (busy || st.phase === "speaking" || Date.now() < quietUntil) {
         segmenter.reset();
+        if (fastDirty) resetFast();
         return;
       }
+      feedFast(frame, sampleRate);
       const utterance = segmenter.push(frame);
       if (st.phase === "listening" && segmenter.isOpen) st.setPhase("recording");
       if (!utterance) return;
@@ -414,6 +521,7 @@ export async function startWakeListening(): Promise<void> {
       pending = { samples: utterance, sampleRate, closedAt: Date.now() };
       void drainHeard();
     });
+    startFast();
     v.setPhase("listening");
     v.setError(null);
   } catch (e) {
@@ -426,6 +534,7 @@ export async function stopWakeListening(): Promise<void> {
   const m = mic;
   mic = null;
   if (m) await m.close();
+  resetFast();
   const v = useVoiceStore.getState();
   if (v.phase === "listening" || v.phase === "recording") v.setPhase("idle");
 }

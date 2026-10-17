@@ -32,6 +32,7 @@ pub mod supervisor_quick;
 pub mod supervisor_settings;
 pub mod supervisor_voice;
 pub mod voice;
+pub mod vosk;
 pub mod web;
 
 pub use error::{CoreError, Result};

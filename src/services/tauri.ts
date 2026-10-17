@@ -21,6 +21,7 @@ import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 import type { VoiceStatus } from "@/types/generated/VoiceStatus";
 import type { CallStatus } from "@/types/generated/CallStatus";
+import type { VoskHeard } from "@/types/generated/VoskHeard";
 import type { QuickCommandInfo } from "@/types/generated/QuickCommandInfo";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
 import type { QuickRunResult } from "@/types/generated/QuickRunResult";
@@ -86,6 +87,10 @@ export const api = {
 
   digestRun: (telegram: boolean) => invoke<DigestResult>("digest_run", { telegram }),
   callStatus: () => invoke<CallStatus>("call_status"),
+  voskStart: () => invoke<void>("vosk_start"),
+  /** 16 kHz PCM16 little-endian, sent as the raw request body. */
+  voskFeed: (pcm: Uint8Array) => invoke<VoskHeard>("vosk_feed", pcm),
+  voskReset: () => invoke<void>("vosk_reset"),
   prefsGet: () => invoke<Prefs>("prefs_get"),
   hotkeyApply: (shortcut: string) => invoke<void>("hotkey_apply", { shortcut }),
   prefsSet: (prefs: Prefs) => invoke<Prefs>("prefs_set", { prefs }),
