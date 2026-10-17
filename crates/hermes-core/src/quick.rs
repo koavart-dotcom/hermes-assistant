@@ -462,7 +462,14 @@ pub fn parse_action(s: &str) -> std::result::Result<Action, String> {
         "ui" => {
             if !matches!(
                 arg,
-                "tickets" | "hud" | "hud_off" | "digest" | "ticket_send" | "quiet_on" | "quiet_off"
+                "tickets"
+                    | "hud"
+                    | "hud_off"
+                    | "digest"
+                    | "ticket_send"
+                    | "quiet_on"
+                    | "quiet_off"
+                    | "follow"
             ) {
                 return Err(format!("unknown ui target `{arg}`"));
             }
@@ -532,6 +539,28 @@ pub fn voice_pack_dir(layout: &Layout) -> PathBuf {
 
 pub fn log_path(layout: &Layout) -> PathBuf {
     layout.app_data_dir.join("quick_commands.log")
+}
+
+/// `say:` argument → one clip: `A|B|C` picks one at random (`seed`), `@greeting`
+/// is «Доброе утро / Добрый день / Добрый вечер» by the local `hour`.
+pub fn pick_clip(spec: &str, hour: u32, seed: usize) -> String {
+    if spec == "@greeting" {
+        return match hour {
+            5..=11 => "Приветствия/Доброе утро, сэр",
+            12..=17 => "Приветствия/Добрый день, сэр",
+            _ => "Приветствия/Добрый вечер, сэр",
+        }
+        .to_string();
+    }
+    let options: Vec<&str> = spec
+        .split('|')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    match options.len() {
+        0 => spec.to_string(),
+        n => options[seed % n].to_string(),
+    }
 }
 
 /// Play a reaction clip outside quick commands (the acknowledgement before a
@@ -696,6 +725,12 @@ impl Executor {
                     if self.silent {
                         continue;
                     }
+                    let seed = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.subsec_nanos() as usize)
+                        .unwrap_or(0);
+                    let clip =
+                        &pick_clip(clip, chrono::Timelike::hour(&chrono::Local::now()), seed);
                     if let Some(path) = clip_path(&self.layout, &self.voice, clip) {
                         platform::play_wav(&path, self.volume).await?;
                     } else {
@@ -1248,6 +1283,39 @@ mod tests {
             .map(|a| parse_action(a).unwrap())
             .collect();
         ex.run(&actions).await.unwrap();
+    }
+
+    #[test]
+    fn clip_choice() {
+        assert_eq!(pick_clip("@greeting", 8, 0), "Приветствия/Доброе утро, сэр");
+        assert_eq!(
+            pick_clip("@greeting", 14, 0),
+            "Приветствия/Добрый день, сэр"
+        );
+        assert_eq!(
+            pick_clip("@greeting", 23, 0),
+            "Приветствия/Добрый вечер, сэр"
+        );
+        assert_eq!(pick_clip("A|B|C", 0, 4), "B");
+        assert_eq!(pick_clip("Окна/Закрываю окно", 0, 7), "Окна/Закрываю окно");
+    }
+
+    #[test]
+    fn presence_phrases_match() {
+        let p = pack();
+        for phrase in [
+            "гермес ты тут",
+            "джарвис ты здесь",
+            "ты меня слышишь",
+            "ты на связи",
+        ] {
+            let m = p.find(phrase).map(|m| m.id.clone());
+            assert_eq!(m.as_deref(), Some("voice.presence"), "{phrase}");
+        }
+        assert_eq!(
+            p.find("привет").map(|m| m.id.clone()).as_deref(),
+            Some("me.greet")
+        );
     }
 
     #[test]

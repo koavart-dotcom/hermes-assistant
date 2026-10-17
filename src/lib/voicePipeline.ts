@@ -12,6 +12,9 @@ import { Segmenter, rms, stripWakeWord } from "@/lib/vad";
 import { TARGET_RATE, downsample, encodeWav, openMic, startRecording, toBase64, type Mic, type Recorder } from "@/lib/wav";
 
 const MIN_UTTERANCE_SEC = 0.5;
+/** After «Я здесь, сэр» the next phrase needs no wake word for this long. */
+const FOLLOW_MS = 8000;
+let followUntil = 0;
 
 let recorder: Recorder | null = null;
 let mic: Mic | null = null;
@@ -173,6 +176,11 @@ export async function showUi(target: string): Promise<void> {
   try {
     if (target === "hud") await api.hudWindowOpen();
     if (target === "hud_off") await api.hudWindowClose();
+    if (target === "follow") {
+      followUntil = Date.now() + FOLLOW_MS;
+      v.setAnswer("Слушаю — можно без «Джарвис».");
+      return;
+    }
     if (target === "quiet_on" || target === "quiet_off") {
       v.setQuiet(target === "quiet_on");
       v.setAnswer(target === "quiet_on" ? "Тихий режим: не говорю и реагирую только на «слушай»." : "Снова слушаю.");
@@ -330,7 +338,10 @@ export async function startWakeListening(): Promise<void> {
       transcribeSamples(utterance, sampleRate)
         .then(async (text) => {
           const prefs = useVoiceStore.getState().prefs;
-          const cmd = stripWakeWord(text, prefs.wake_words);
+          let cmd = stripWakeWord(text, prefs.wake_words);
+          // Right after «Я здесь, сэр» the phrase is addressed to us even without the wake word.
+          if (cmd === null && Date.now() < followUntil && text.trim()) cmd = text;
+          followUntil = 0;
           if (useVoiceStore.getState().quiet) {
             // Quiet mode: only the phrase that ends it is honoured.
             const q = await api.quickMatch(cmd ?? text);
@@ -353,7 +364,8 @@ export async function startWakeListening(): Promise<void> {
             useVoiceStore.getState().setPhase("listening");
             return;
           }
-          await handleUtterance(cmd || "привет");
+          // A bare «Джарвис» works like «Джарвис, ты тут?»: a reply clip and a follow-up window.
+          await handleUtterance(cmd || "ты тут");
         })
         .catch((e) => {
           useVoiceStore.getState().setError(errorText(e));
