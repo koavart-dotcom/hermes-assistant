@@ -39,8 +39,8 @@ pub fn presets() -> Vec<EnvPreset> {
         p(
             "freescout",
             "FreeScout (хелпдеск Deka)",
-            &["FREESCOUT_URL", "FREESCOUT_API_KEY", "FREESCOUT_MY_USER_ID"],
-            "Адрес вида https://helpdesk.example.com, ключ API из настроек FreeScout и ваш id пользователя (для фильтра «мои тикеты»).",
+            &["FREESCOUT_URL", "FREESCOUT_API_KEY", "FREESCOUT_MY_USER_ID", "FREESCOUT_MAILBOXES"],
+            "Адрес вида https://helpdesk.example.com, ключ API из настроек FreeScout и ваш id пользователя (для фильтра «мои тикеты»). FREESCOUT_MAILBOXES — id ящиков через запятую, по умолчанию 1 (IT Support, support@deka.ua); чужие ящики не показываются.",
         ),
         p(
             "google_calendar",

@@ -19,7 +19,13 @@ pub struct Config {
     pub url: String,
     pub api_key: String,
     pub my_user_id: Option<u64>,
+    /// Mailboxes that are ours (`FREESCOUT_MAILBOXES`, ids comma-separated);
+    /// default 1 — IT Support (support@deka.ua). Other teams' boxes are not shown.
+    pub mailboxes: Vec<u64>,
 }
+
+/// IT Support (support@deka.ua) — Artem's board.
+pub const DEFAULT_MAILBOXES: &[u64] = &[1];
 
 /// Read the FreeScout settings from Hermes' `.env`; `None` when not configured.
 pub fn config(layout: &Layout) -> Result<Option<Config>> {
@@ -42,10 +48,16 @@ pub fn config(layout: &Layout) -> Result<Option<Config>> {
     let my_user_id = kv
         .get("FREESCOUT_MY_USER_ID")
         .and_then(|s| s.trim().parse().ok());
+    let mailboxes: Vec<u64> = kv
+        .get("FREESCOUT_MAILBOXES")
+        .map(|s| s.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .filter(|v: &Vec<u64>| !v.is_empty())
+        .unwrap_or_else(|| DEFAULT_MAILBOXES.to_vec());
     Ok(Some(Config {
         url,
         api_key,
         my_user_id,
+        mailboxes,
     }))
 }
 
@@ -175,6 +187,11 @@ impl Client {
             .unwrap_or_default()
             .into_iter()
             .filter(|c| c["state"].as_str().unwrap_or("published") == "published")
+            .filter(|c| {
+                c["mailboxId"]
+                    .as_u64()
+                    .is_some_and(|m| self.cfg.mailboxes.contains(&m))
+            })
             .collect())
     }
 
@@ -684,6 +701,7 @@ mod tests {
         let c = config(&layout).unwrap().unwrap();
         assert_eq!(c.url, "https://h.example");
         assert_eq!(c.my_user_id, Some(4));
+        assert_eq!(c.mailboxes, vec![1], "only IT Support by default");
         let _ = std::fs::remove_dir_all(&root);
     }
 }
