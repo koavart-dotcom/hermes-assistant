@@ -17,7 +17,7 @@ const STT_HINT: Record<string, string> = {
   small: "баланс (по умолчанию)",
   medium: "точнее, 1–2 с дольше",
   "large-v3": "самая точная, ~3 ГБ",
-  "large-v3-turbo": "точная и быстрая, ~1,6 ГБ",
+  "large-v3-turbo": "точная и быстрая, ~1,6 ГБ видеопамяти (рекомендуется)",
 };
 const LANGS: Array<[string, string]> = [["ru", "русский"], ["uk", "украинский"], ["en", "английский"], ["auto", "определять"]];
 
@@ -68,7 +68,7 @@ export function SpeechSection() {
       <h2 id="speech-title" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
         <AudioLines className="size-4" /> Распознавание и озвучка
       </h2>
-      <p className="text-muted-foreground">Распознаёт Whisper на вашей видеокарте. Изменения перезапускают сервер голоса; новая модель или голос скачиваются при первом использовании.</p>
+      <p className="text-muted-foreground">Распознаёт Whisper на вашей видеокарте. Если основная модель локальная (Ollama), выбирайте small: крупный Whisper и Qwen вместе не помещаются в 12 ГБ. Изменения перезапускают сервер голоса; новая модель или голос скачиваются при первом использовании.</p>
       {!enabled ? <p className="text-muted-foreground">Доступно только внутри приложения.</p> : null}
       {d ? (
         <>

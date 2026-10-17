@@ -72,6 +72,9 @@ impl Supervisor {
                     let result = async {
                         let vs = sup.voice_server()?;
                         vs.install_deps(&tx, &cancel).await?;
+                        if let Err(e) = crate::voice::ensure_cuda_dlls(&sup.ctx.layout) {
+                            log::warn!("voice: CUDA DLLs for Whisper: {e}");
+                        }
                         let _ = tx.send(SetupEvent::Log {
                             line: "voice: starting the Hermes web server".into(),
                         });
@@ -109,6 +112,9 @@ impl Supervisor {
         if !vs.deps_ready() {
             return Ok(false);
         }
+        if let Err(e) = crate::voice::ensure_cuda_dlls(&self.ctx.layout) {
+            log::warn!("voice: CUDA DLLs for Whisper: {e}");
+        }
         if let Some(child) = vs.start().await? {
             let mut c = self
                 .dashboard_child
@@ -123,6 +129,9 @@ impl Supervisor {
     /// `hermes pm install`) and start it again.
     pub async fn voice_restart_server(&self) -> Result<()> {
         let vs = self.voice_server()?;
+        if let Err(e) = crate::voice::ensure_cuda_dlls(&self.ctx.layout) {
+            log::warn!("voice: CUDA DLLs for Whisper: {e}");
+        }
         {
             let mut c = self
                 .dashboard_child

@@ -68,6 +68,52 @@ pub fn token(layout: &Layout) -> Result<String> {
     Ok(t)
 }
 
+/// CTranslate2 (faster-whisper) in the Hermes venvs ships cuDNN but not the
+/// CUDA 12 runtime, so Whisper silently falls back to the CPU (10 s per phrase
+/// with large-v3-turbo instead of 0.5 s on the RTX). The Ollama sidecar carries
+/// the same CUDA 12 DLLs: copy them next to every `ctranslate2` package.
+/// Returns how many files were copied. Safe to run on every start.
+pub fn ensure_cuda_dlls(layout: &Layout) -> Result<usize> {
+    const DLLS: &[&str] = &["cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll"];
+    let src = crate::cli::cuda_dir(layout);
+    if !src.is_dir() {
+        return Ok(0);
+    }
+    let installs = layout.hermes_home.join("installs");
+    let mut copied = 0;
+    let Ok(installs_rd) = std::fs::read_dir(&installs) else {
+        return Ok(0);
+    };
+    for install in installs_rd.flatten() {
+        let Ok(envs) = std::fs::read_dir(install.path().join("environments")) else {
+            continue;
+        };
+        for env in envs.flatten() {
+            let ct2 = env
+                .path()
+                .join("venv")
+                .join("Lib")
+                .join("site-packages")
+                .join("ctranslate2");
+            if !ct2.is_dir() {
+                continue;
+            }
+            for dll in DLLS {
+                let from = src.join(dll);
+                let to = ct2.join(dll);
+                if from.is_file() && !to.exists() {
+                    std::fs::copy(&from, &to)?;
+                    copied += 1;
+                }
+            }
+        }
+    }
+    if copied > 0 {
+        log::info!("voice: copied {copied} CUDA DLLs next to ctranslate2 (GPU Whisper)");
+    }
+    Ok(copied)
+}
+
 /// The Hermes config keys our shell owns for voice (Russian, local STT).
 pub fn settings() -> Vec<(String, String)> {
     vec![
@@ -309,6 +355,32 @@ impl VoiceServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cuda_dlls_are_copied_into_every_ctranslate2() {
+        let root = std::env::temp_dir().join(format!("hermes-cuda-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let layout = Layout::from_roots(&root, &root.join("data"));
+        assert_eq!(ensure_cuda_dlls(&layout).unwrap(), 0);
+        let src = crate::cli::cuda_dir(&layout);
+        std::fs::create_dir_all(&src).unwrap();
+        for f in ["cublas64_12.dll", "cublasLt64_12.dll", "cudart64_12.dll"] {
+            std::fs::write(src.join(f), b"x").unwrap();
+        }
+        for env in ["a", "b"] {
+            std::fs::create_dir_all(
+                layout
+                    .hermes_home
+                    .join("installs/i1/environments")
+                    .join(env)
+                    .join("venv/Lib/site-packages/ctranslate2"),
+            )
+            .unwrap();
+        }
+        assert_eq!(ensure_cuda_dlls(&layout).unwrap(), 6);
+        assert_eq!(ensure_cuda_dlls(&layout).unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn settings_make_russian_local_voice() {

@@ -26,6 +26,37 @@ pub fn hermes_env(cmd: &mut Command, layout: &Layout) {
     cmd.env("HERMES_HOME", &layout.hermes_home);
     cmd.env("HERMES_NONINTERACTIVE", "1");
     cmd.env("UV_NO_CONFIG", "1");
+    // CUDA runtime for faster-whisper (CTranslate2 needs cublas64_12.dll,
+    // which the Hermes venv does not ship) — the Ollama sidecar carries it.
+    // Without this, Whisper silently runs on the CPU (9 s instead of 0.2 s).
+    let cuda = cuda_dir(layout);
+    if cuda.is_dir() {
+        cmd.env("PATH", prepend_path(std::env::var_os("PATH"), &cuda));
+    }
+}
+
+/// `D:\hermes\ollama\lib\ollama\cuda_v12` — CUDA 12 DLLs bundled with Ollama.
+pub fn cuda_dir(layout: &Layout) -> std::path::PathBuf {
+    layout
+        .ollama_dir
+        .join("lib")
+        .join("ollama")
+        .join("cuda_v12")
+}
+
+pub fn prepend_path(
+    existing: Option<std::ffi::OsString>,
+    dir: &std::path::Path,
+) -> std::ffi::OsString {
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let mut out = std::ffi::OsString::from(dir);
+    if let Some(e) = existing {
+        if !e.is_empty() {
+            out.push(sep);
+            out.push(e);
+        }
+    }
+    out
 }
 
 /// Output of a finished child process.
@@ -174,6 +205,21 @@ pub fn powershell_script(script: &Path) -> Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cuda_dir_is_prepended_to_path() {
+        let layout =
+            Layout::from_roots(std::path::Path::new("/lad"), std::path::Path::new("/data"));
+        assert!(cuda_dir(&layout).to_string_lossy().contains("cuda_v12"));
+        let p = prepend_path(Some("/usr/bin".into()), std::path::Path::new("/x/cuda"));
+        let s = p.to_string_lossy();
+        assert!(s.starts_with("/x/cuda"));
+        assert!(s.ends_with("/usr/bin"));
+        assert_eq!(
+            prepend_path(None, std::path::Path::new("/x")).to_string_lossy(),
+            "/x"
+        );
+    }
 
     #[tokio::test]
     async fn lossy_reader_survives_invalid_utf8_and_crlf() {
