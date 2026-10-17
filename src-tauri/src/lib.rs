@@ -202,6 +202,7 @@ pub fn run() {
             commands::voice_status,
             commands::voice_setup,
             commands::voice_transcribe,
+            commands::voice_ack,
             commands::voice_speak,
             commands::quick_commands,
             commands::quick_match,

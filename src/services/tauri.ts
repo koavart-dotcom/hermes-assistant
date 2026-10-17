@@ -54,6 +54,7 @@ export const api = {
   voiceSetup: () => invoke<void>("voice_setup"),
   voiceTranscribe: (audioBase64: string, mimeType = "audio/wav") =>
     invoke<string>("voice_transcribe", { audioBase64, mimeType }),
+  voiceAck: () => invoke<void>("voice_ack"),
   voiceSpeak: (text: string) => invoke<string>("voice_speak", { text }),
 
   quickCommands: () => invoke<QuickCommandInfo[]>("quick_commands"),

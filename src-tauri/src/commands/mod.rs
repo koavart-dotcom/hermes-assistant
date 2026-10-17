@@ -208,6 +208,12 @@ pub async fn voice_transcribe(
         .map_err(err)
 }
 
+/// Reaction clip before a model answer; also wakes the Jarvis voice server.
+#[tauri::command]
+pub async fn voice_ack(state: State<'_, AppState>) -> Result<(), String> {
+    state.supervisor.voice_ack().await.map_err(err)
+}
+
 /// Returns a `data:` URL with the synthesized speech.
 #[tauri::command]
 pub async fn voice_speak(state: State<'_, AppState>, text: String) -> Result<String, String> {

@@ -21,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +34,9 @@ os.environ.setdefault("COQUI_TOS_AGREED", "1")
 LOG = HERE / "server.log"
 VOICE_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "ua.koavart.hermes" / "voice-pack" / "Jarvis"
 REF_CLIPS = 8
+# Unload after this many quiet minutes (frees ~6-7 GB RAM and ~3 GB VRAM); 0 keeps the model loaded.
+# Hermes Assistant wakes the server again when a voice question goes to the model.
+IDLE_MIN = float(os.environ.get("JARVIS_TTS_IDLE_MIN", "30"))
 
 
 def reference_clips() -> list[str]:
@@ -77,12 +81,14 @@ def serve() -> None:
                 self.end_headers()
                 return
             t = time.time()
+            state["last"] = t
             with state["lock"]:
                 wav = state["model"].inference(text, body.get("language", "ru"), state["latents"],
                                                state["speaker"], temperature=0.65,
                                                enable_text_splitting=True)["wav"]
             import soundfile as sf
             sf.write(out, wav, 24000)
+            state["last"] = time.time()
             print(f"{len(text)} chars in {time.time() - t:.2f}s", flush=True)
             self.send_response(200)
             self.end_headers()
@@ -103,10 +109,15 @@ def serve() -> None:
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
     model = tts.synthesizer.tts_model
     latents, speaker = model.get_conditioning_latents(audio_path=reference_clips())
-    state.update(model=model, latents=latents, speaker=speaker, lock=threading.Lock())
+    state.update(model=model, latents=latents, speaker=speaker, lock=threading.Lock(), last=time.time())
     ready.set()
     print(f"ready on {device} in {time.time() - t0:.1f}s", flush=True)
-    threading.Event().wait()
+    while True:
+        time.sleep(30)
+        if IDLE_MIN > 0 and time.time() - state["last"] > IDLE_MIN * 60 and state["lock"].acquire(blocking=False):
+            print(f"idle for {IDLE_MIN:g} min, unloading", flush=True)
+            httpd.server_close()
+            os._exit(0)
 
 
 def port_open() -> bool:
@@ -151,10 +162,16 @@ def ensure_server(wait_s: int = 180) -> None:
 
 def say(text_file: str, out: str) -> None:
     text = Path(text_file).read_text(encoding="utf-8").strip()
-    ensure_server()
-    req = urllib.request.Request(f"http://{HOST}:{PORT}/", data=json.dumps({"text": text, "out": out}).encode(),
-                                 headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=300).read()
+    for attempt in range(2):
+        ensure_server()
+        req = urllib.request.Request(f"http://{HOST}:{PORT}/", data=json.dumps({"text": text, "out": out}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=300).read()
+            return
+        except urllib.error.URLError:
+            if attempt:  # the server unloaded itself between the check and the request: start it again
+                raise
 
 
 if __name__ == "__main__":

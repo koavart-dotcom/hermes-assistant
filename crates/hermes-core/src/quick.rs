@@ -534,6 +534,12 @@ pub fn log_path(layout: &Layout) -> PathBuf {
     layout.app_data_dir.join("quick_commands.log")
 }
 
+/// Play a reaction clip outside quick commands (the acknowledgement before a
+/// model answer, see `Supervisor::voice_ack`).
+pub async fn play_clip(path: &Path, volume: f64) -> Result<()> {
+    platform::play_wav(path, volume).await
+}
+
 /// Resolve `say:` to a file: `<voice-pack>/<voice>/<path>.wav`, trying the
 /// plain clip and the ", сэр" variant.
 pub fn clip_path(layout: &Layout, voice: &str, clip: &str) -> Option<PathBuf> {

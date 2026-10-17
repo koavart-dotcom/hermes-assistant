@@ -13,6 +13,9 @@ use crate::supervisor::Supervisor;
 use crate::voice::{VoiceServer, VoiceStatus};
 use crate::{CoreError, Result};
 
+/// Reaction clips (voice pack paths) played while the model works on a voice question.
+const ACK_CLIPS: &[&str] = &["Подтверждение_Ответ/Вас понял, сэр", "Подтверждение_Ответ/Принято, сэр"];
+
 impl Supervisor {
     pub fn voice_server(&self) -> Result<VoiceServer> {
         VoiceServer::new(self.ctx.layout.clone())
@@ -160,6 +163,28 @@ impl Supervisor {
             self.voice_ensure_server().await?;
         }
         vs.transcribe(audio, mime).await
+    }
+
+    /// Right after a voice question goes to the model: wake the Jarvis voice
+    /// server (it unloads itself after a quiet spell, loading takes 10–60 s and
+    /// overlaps with the model's thinking) and play a short reaction clip.
+    /// Returns once the clip has finished.
+    pub async fn voice_ack(&self) -> Result<()> {
+        let layout = self.ctx.layout.clone();
+        tokio::spawn(async move { crate::voice::jarvis_tts_warm(&layout).await });
+        let prefs = self.prefs();
+        if prefs.silent {
+            return Ok(());
+        }
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos() as usize)
+            .unwrap_or(0);
+        let clip = ACK_CLIPS[nanos % ACK_CLIPS.len()];
+        match crate::quick::clip_path(&self.ctx.layout, &self.quick_voice(), clip) {
+            Some(path) => crate::quick::play_clip(&path, prefs.voice_volume).await,
+            None => Ok(()),
+        }
     }
 
     pub async fn voice_speak(&self, text: &str) -> Result<String> {

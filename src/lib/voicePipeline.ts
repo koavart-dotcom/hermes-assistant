@@ -106,12 +106,33 @@ export async function handleUtterance(text: string): Promise<void> {
       if (r.ok && r.handoff) await sendToChat(text, r.handoff);
       return;
     }
+    playAck();
     // The persona answers «[голос]» messages briefly and without Markdown (they are spoken).
     await sendToChat(text, `[голос] ${text}`);
   } catch (e) {
     v.setError(errorText(e));
     v.setPhase(idlePhase());
   }
+}
+
+let ack: Promise<void> | null = null;
+
+/**
+ * «Вас понял, сэр» while the model thinks. The backend also wakes the Jarvis voice
+ * server, which unloads itself when idle, so its loading overlaps with the thinking.
+ */
+function playAck(): void {
+  const v = useVoiceStore.getState();
+  if (!v.speak || v.quiet) return;
+  quietUntil = Date.now() + 4000; // the mic must not take the clip for a new question
+  const p: Promise<void> = api
+    .voiceAck()
+    .catch((e: unknown) => reportError("ack", errorText(e)))
+    .finally(() => {
+      quietUntil = Date.now() + 700;
+      if (ack === p) ack = null;
+    });
+  ack = p;
 }
 
 /** Send a turn to the voice chat session; `shown` is what the user said, `message` what the model gets. */
@@ -197,6 +218,7 @@ export async function speakAnswer(content: string): Promise<void> {
   v.setPhase("speaking");
   try {
     const url = await api.voiceSpeak(content);
+    if (ack) await ack; // let the reaction clip finish first
     stopSpeaking();
     const a = new Audio(url);
     a.volume = Math.min(1, Math.max(0, v.prefs.voice_volume));
