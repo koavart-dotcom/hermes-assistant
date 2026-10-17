@@ -16,8 +16,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,7 +42,59 @@ def reference_clips() -> list[str]:
     return [str(p) for p in wavs[:REF_CLIPS]]
 
 
+class _Server(ThreadingHTTPServer):
+    # Exclusive port: on Windows SO_REUSEADDR lets a second server bind the same port, so two copies
+    # would each load XTTS (~6-7 GB RAM) — on 17.10.2026 that ran the PC out of commit memory.
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def serve() -> None:
+    # Bind first, load later: the port is the single-instance lock, and callers see "loading" (503)
+    # instead of a closed port and do not start another copy.
+    ready = threading.Event()
+    state: dict = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_a):  # quiet
+            pass
+
+        def do_GET(self):
+            self.send_response(200 if ready.is_set() else 503)
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}' if ready.is_set() else b'{"ok": false, "loading": true}')
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+            text = (body.get("text") or "").strip()
+            out = body.get("out")
+            if not text or not out or not ready.wait(300):
+                self.send_response(400 if not text or not out else 503)
+                self.end_headers()
+                return
+            t = time.time()
+            with state["lock"]:
+                wav = state["model"].inference(text, body.get("language", "ru"), state["latents"],
+                                               state["speaker"], temperature=0.65,
+                                               enable_text_splitting=True)["wav"]
+            import soundfile as sf
+            sf.write(out, wav, 24000)
+            print(f"{len(text)} chars in {time.time() - t:.2f}s", flush=True)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True, "out": out}).encode())
+
+    try:
+        httpd = _Server((HOST, PORT), Handler)
+    except OSError:
+        print("another jarvis-tts server owns the port, exiting", flush=True)
+        return
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
     import torch
     from TTS.api import TTS
 
@@ -49,36 +103,18 @@ def serve() -> None:
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
     model = tts.synthesizer.tts_model
     latents, speaker = model.get_conditioning_latents(audio_path=reference_clips())
+    state.update(model=model, latents=latents, speaker=speaker, lock=threading.Lock())
+    ready.set()
     print(f"ready on {device} in {time.time() - t0:.1f}s", flush=True)
+    threading.Event().wait()
 
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *_a):  # quiet
-            pass
 
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
-
-        def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-            text = (body.get("text") or "").strip()
-            out = body.get("out")
-            if not text or not out:
-                self.send_response(400)
-                self.end_headers()
-                return
-            t = time.time()
-            wav = model.inference(text, body.get("language", "ru"), latents, speaker, temperature=0.65,
-                                  enable_text_splitting=True)["wav"]
-            import soundfile as sf
-            sf.write(out, wav, 24000)
-            print(f"{len(text)} chars in {time.time() - t:.2f}s", flush=True)
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": True, "out": out}).encode())
-
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+def port_open() -> bool:
+    try:
+        with socket.create_connection((HOST, PORT), timeout=1):
+            return True
+    except OSError:
+        return False
 
 
 def alive() -> bool:
@@ -92,18 +128,19 @@ def alive() -> bool:
 def ensure_server(wait_s: int = 180) -> None:
     if alive():
         return
-    # DETACHED_PROCESS | NEW_PROCESS_GROUP, plus CREATE_BREAKAWAY_FROM_JOB: Hermes runs command
-    # providers inside a job object that is torn down after each phrase; the server must outlive it,
-    # otherwise every phrase would reload the model (~80 s).
-    base = 0x00000008 | 0x00000200 if os.name == "nt" else 0
-    with open(LOG, "ab") as log:
-        for flags in ((base | 0x01000000, base) if os.name == "nt" else (0,)):
-            try:
-                subprocess.Popen([sys.executable, str(Path(__file__)), "serve"], stdout=log, stderr=log,
-                                 stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
-                break
-            except OSError:
-                continue  # breakaway not allowed by the job: start inside it
+    if not port_open():
+        # DETACHED_PROCESS | NEW_PROCESS_GROUP, plus CREATE_BREAKAWAY_FROM_JOB: Hermes runs command
+        # providers inside a job object that is torn down after each phrase; the server must outlive
+        # it, otherwise every phrase would reload the model (~80 s).
+        base = 0x00000008 | 0x00000200 if os.name == "nt" else 0
+        with open(LOG, "ab") as log:
+            for flags in ((base | 0x01000000, base) if os.name == "nt" else (0,)):
+                try:
+                    subprocess.Popen([sys.executable, str(Path(__file__)), "serve"], stdout=log, stderr=log,
+                                     stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
+                    break
+                except OSError:
+                    continue  # breakaway not allowed by the job: start inside it
     deadline = time.time() + wait_s
     while time.time() < deadline:
         if alive():
