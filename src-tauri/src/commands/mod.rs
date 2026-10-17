@@ -477,12 +477,16 @@ pub async fn digest_run(
 /// Fast recogniser for always-listening mode: fetch (once, ≈60 MB) and load Vosk.
 #[tauri::command]
 pub async fn vosk_start(state: State<'_, AppState>) -> Result<(), String> {
-    hermes_core::vosk::start(&state.supervisor.ctx.layout).await.map_err(err)
+    hermes_core::vosk::start(&state.supervisor.ctx.layout)
+        .await
+        .map_err(err)
 }
 
 /// Raw body: 16 kHz PCM16 little-endian.
 #[tauri::command]
-pub async fn vosk_feed(request: tauri::ipc::Request<'_>) -> Result<hermes_core::vosk::VoskHeard, String> {
+pub async fn vosk_feed(
+    request: tauri::ipc::Request<'_>,
+) -> Result<hermes_core::vosk::VoskHeard, String> {
     match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => hermes_core::vosk::feed(bytes).map_err(err),
         _ => Err("vosk_feed expects raw PCM16".into()),
