@@ -80,11 +80,31 @@ export interface Mic {
   close: () => Promise<void>;
 }
 
-/** Open the default microphone and stream float frames (always-listening mode). */
+let preferredMic = "";
+
+/** Microphone label from the settings («» — the system default). */
+export function setPreferredMic(label: string): void {
+  preferredMic = label.trim();
+}
+
+/** Audio inputs the window can use (labels appear once the mic was allowed). */
+export async function listMics(): Promise<string[]> {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  return devices.filter((d) => d.kind === "audioinput" && d.label && d.deviceId !== "default" && d.deviceId !== "communications").map((d) => d.label);
+}
+
+/** Constraints for the chosen microphone; falls back to the default when it is unplugged. */
+async function audioConstraints(): Promise<MediaTrackConstraints> {
+  const base: MediaTrackConstraints = { channelCount: 1, echoCancellation: true, noiseSuppression: true };
+  if (!preferredMic) return base;
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const hit = devices.find((d) => d.kind === "audioinput" && d.label === preferredMic);
+  return hit ? { ...base, deviceId: { exact: hit.deviceId } } : base;
+}
+
+/** Open the chosen microphone and stream float frames (always-listening mode). */
 export async function openMic(onFrame: (frame: Float32Array, sampleRate: number) => void): Promise<Mic> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-  });
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: await audioConstraints() });
   const ctx = new AudioContext();
   const source = ctx.createMediaStreamSource(stream);
   const processor = ctx.createScriptProcessor(4096, 1, 1);
@@ -107,11 +127,9 @@ export interface Recorder {
   onLevel: (cb: (level: number) => void) => void;
 }
 
-/** Start capturing the default microphone; `stop()` returns the WAV. */
+/** Start capturing the chosen microphone; `stop()` returns the WAV. */
 export async function startRecording(): Promise<Recorder> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-  });
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: await audioConstraints() });
   const ctx = new AudioContext();
   const source = ctx.createMediaStreamSource(stream);
   const processor = ctx.createScriptProcessor(4096, 1, 1);

@@ -30,6 +30,9 @@ pub struct Prefs {
     pub claude_project: String,
     /// Global push-to-talk shortcut (Tauri syntax, e.g. `CommandOrControl+Shift+Space`); empty = off.
     pub hotkey: String,
+    /// Microphone label as the window sees it (e.g. «Микрофон (A4ech FHD 1080P PC Camera)»);
+    /// empty — the system default. Matched by label because device ids change.
+    pub mic_device: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
@@ -72,6 +75,7 @@ impl Default for Prefs {
             digest: Digest::default(),
             claude_project: "hermes-assistant".into(),
             hotkey: "CommandOrControl+Shift+Space".into(),
+            mic_device: String::new(),
         }
     }
 }
@@ -150,11 +154,13 @@ mod tests {
             },
             claude_project: "hermes-assistant".into(),
             hotkey: "Ctrl+Alt+J".into(),
+            mic_device: "Микрофон (A4ech FHD 1080P PC Camera)".into(),
         };
         let saved = save(&layout, &p).unwrap();
         assert_eq!(saved.voice_volume, 1.0);
         assert_eq!(saved.wake_words, vec!["джарвис"]);
         assert_eq!(saved.voice_pack, "Jarvis");
+        assert_eq!(saved.mic_device, "Микрофон (A4ech FHD 1080P PC Camera)");
         assert_eq!(saved.digest.times, vec!["09:05", "17:00"]);
         assert_eq!(load(&layout), saved);
         // Unknown/missing fields fall back to defaults.

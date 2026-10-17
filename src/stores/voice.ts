@@ -10,6 +10,7 @@ export const DEFAULT_PREFS: Prefs = {
   digest: { enabled: false, times: ["09:00", "14:00", "17:00"], speak: true, telegram: true },
   claude_project: "hermes-assistant",
   hotkey: "CommandOrControl+Shift+Space",
+  mic_device: "",
 };
 
 /** How the assistant takes input: text only, push-to-talk, or always listening for a wake word. */

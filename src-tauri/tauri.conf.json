@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Hermes Assistant",
   "mainBinaryName": "hermes-assistant",
-  "version": "0.23.2",
+  "version": "0.24.0",
   "identifier": "ua.koavart.hermes",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -68,6 +68,8 @@
       "resources/hermes/": "resources/hermes/",
       "../hermes-plugins/hermes_permissions/plugin.yaml": "resources/hermes-plugins/hermes_permissions/plugin.yaml",
       "../hermes-plugins/hermes_permissions/__init__.py": "resources/hermes-plugins/hermes_permissions/__init__.py",
+      "../hermes-plugins/hermes_camera/plugin.yaml": "resources/hermes-plugins/hermes_camera/plugin.yaml",
+      "../hermes-plugins/hermes_camera/__init__.py": "resources/hermes-plugins/hermes_camera/__init__.py",
       "../hermes-quick-commands/default.ru.json": "resources/hermes-quick-commands/default.ru.json",
       "../hermes-skills/": "resources/hermes-skills/",
       "../hermes-persona/SOUL.md": "resources/hermes-persona/SOUL.md"

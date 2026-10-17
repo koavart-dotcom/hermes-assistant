@@ -189,14 +189,8 @@ async fn run_inner(
         cancel,
     )
     .await?;
-    // Our permission plugin (pre_tool_call levels) ships with the app.
-    crate::plugins::install_permissions_plugin(
-        &ctx.layout,
-        &ctx.plugins_dir.join(crate::plugins::PERMISSIONS_PLUGIN),
-        Some(events),
-        cancel,
-    )
-    .await?;
+    // Our plugins (permission levels, camera) ship with the app.
+    crate::plugins::install_plugins(&ctx.layout, &ctx.plugins_dir, Some(events), cancel).await?;
     emit(
         events,
         SetupEvent::StepFinished {

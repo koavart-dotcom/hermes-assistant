@@ -1,4 +1,4 @@
-//! Install our Hermes plugins (today: `hermes_permissions`) from the app's
+//! Install our Hermes plugins (`hermes_permissions`, `hermes_camera`) from the app's
 //! bundled resources into `$HERMES_HOME/plugins/<name>/` and enable them.
 //! Idempotent: files are compared byte-for-byte, so an app update that ships
 //! a new plugin version is rolled out on the next start; `changed == true`
@@ -13,6 +13,11 @@ use crate::events::{EventSender, SetupEvent, emit};
 use crate::{CoreError, Layout, Result};
 
 pub const PERMISSIONS_PLUGIN: &str = "hermes_permissions";
+pub const CAMERA_PLUGIN: &str = "hermes_camera";
+/// Every plugin the app ships, with the plugin toolset (if any) to enable for
+/// the api_server platform (our chat): plugin toolsets start disabled there.
+pub const PLUGINS: &[(&str, Option<&str>)] =
+    &[(PERMISSIONS_PLUGIN, None), (CAMERA_PLUGIN, Some("camera"))];
 pub const LOG_FILE: &str = "hermes_permissions.log";
 pub const POLICY_FILE: &str = "hermes_permissions.json";
 
@@ -147,35 +152,51 @@ pub fn policy_path(layout: &Layout) -> PathBuf {
     layout.hermes_home.join(POLICY_FILE)
 }
 
-/// Install (or refresh) the permissions plugin and enable it. Returns whether
-/// files changed (caller restarts the gateway if it is running).
-pub async fn install_permissions_plugin(
+/// Install (or refresh) every bundled plugin from `plugins_dir/<name>` and
+/// enable it. Returns whether files changed (caller restarts the gateway if
+/// it is running). A plugin missing from the bundle is skipped with a log line.
+pub async fn install_plugins(
     layout: &Layout,
-    src_dir: &Path,
+    plugins_dir: &Path,
     events: Option<&EventSender>,
     cancel: &CancellationToken,
 ) -> Result<bool> {
-    let changed = sync_plugin_files(src_dir, &layout.hermes_home, PERMISSIONS_PLUGIN)?;
-    if let Some(tx) = events {
-        emit(
-            tx,
-            SetupEvent::Log {
-                line: if changed {
-                    format!("plugin {PERMISSIONS_PLUGIN}: files installed")
-                } else {
-                    format!("plugin {PERMISSIONS_PLUGIN}: up to date")
+    let mut changed = false;
+    for (name, toolset) in PLUGINS {
+        let src = plugins_dir.join(name);
+        if !src.join("plugin.yaml").exists() {
+            log::warn!("plugin {name}: not in the bundle ({})", src.display());
+            continue;
+        }
+        let files_changed = sync_plugin_files(&src, &layout.hermes_home, name)?;
+        changed |= files_changed;
+        if let Some(tx) = events {
+            emit(
+                tx,
+                SetupEvent::Log {
+                    line: if files_changed {
+                        format!("plugin {name}: files installed")
+                    } else {
+                        format!("plugin {name}: up to date")
+                    },
                 },
-            },
-        );
+            );
+        }
+        // `hermes plugins enable` / `tools enable` are idempotent; they only edit config.yaml.
+        run_hermes(layout, &["plugins", "enable", name], events, cancel).await?;
+        if let Some(ts) = toolset {
+            if let Err(e) = run_hermes(
+                layout,
+                &["tools", "enable", ts, "--platform", "api_server"],
+                events,
+                cancel,
+            )
+            .await
+            {
+                log::warn!("plugin {name}: enabling toolset {ts} for api_server: {e}");
+            }
+        }
     }
-    // `hermes plugins enable` is idempotent; it only edits config.yaml.
-    run_hermes(
-        layout,
-        &["plugins", "enable", PERMISSIONS_PLUGIN],
-        events,
-        cancel,
-    )
-    .await?;
     Ok(changed)
 }
 
@@ -209,10 +230,27 @@ mod tests {
 
     #[test]
     fn repo_plugin_sources_are_shipped_as_is() {
-        let src =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../hermes-plugins/hermes_permissions");
-        assert!(src.join("plugin.yaml").exists(), "{}", src.display());
-        assert!(src.join("__init__.py").exists());
+        for (name, _) in PLUGINS {
+            let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../hermes-plugins")
+                .join(name);
+            assert!(src.join("plugin.yaml").exists(), "{}", src.display());
+            assert!(src.join("__init__.py").exists());
+        }
+    }
+
+    #[test]
+    fn bundle_lists_every_plugin() {
+        let conf = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/tauri.conf.json"),
+        )
+        .unwrap();
+        for (name, _) in PLUGINS {
+            for f in ["plugin.yaml", "__init__.py"] {
+                let key = format!("../hermes-plugins/{name}/{f}");
+                assert!(conf.contains(&key), "tauri.conf.json resources miss {key}");
+            }
+        }
     }
 }
 

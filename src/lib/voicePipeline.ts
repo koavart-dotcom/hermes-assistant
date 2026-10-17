@@ -9,7 +9,7 @@ import { useChatStore } from "@/stores/chat";
 import { useVoiceStore } from "@/stores/voice";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
 import { Segmenter, rms, stripWakeWord } from "@/lib/vad";
-import { TARGET_RATE, downsample, encodeWav, openMic, startRecording, toBase64, type Mic, type Recorder } from "@/lib/wav";
+import { TARGET_RATE, downsample, encodeWav, openMic, setPreferredMic, startRecording, toBase64, type Mic, type Recorder } from "@/lib/wav";
 
 const MIN_UTTERANCE_SEC = 0.5;
 /** After «Я здесь, сэр» the next phrase needs no wake word for this long. */
@@ -390,6 +390,13 @@ export async function stopWakeListening(): Promise<void> {
   const v = useVoiceStore.getState();
   if (v.phase === "listening" || v.phase === "recording") v.setPhase("idle");
 }
+
+// The microphone chosen in Settings: used by the next recording; the always-on stream reopens on it.
+useVoiceStore.subscribe((s, prev) => {
+  if (s.prefs.mic_device === prev.prefs.mic_device) return;
+  setPreferredMic(s.prefs.mic_device);
+  if (mic) void stopWakeListening().then(startWakeListening);
+});
 
 /** Load shell preferences into the store (called at start and after Settings saves). */
 export async function loadPrefs(): Promise<void> {

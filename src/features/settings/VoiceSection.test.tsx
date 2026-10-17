@@ -22,6 +22,7 @@ const prefs = {
   digest: { enabled: false, times: ["09:00"], speak: true, telegram: true },
   claude_project: "hermes-assistant",
   hotkey: "F9",
+  mic_device: "",
 };
 
 describe("VoiceSection", () => {

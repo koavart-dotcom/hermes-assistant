@@ -34,4 +34,9 @@ claude_project: string,
 /**
  * Global push-to-talk shortcut (Tauri syntax, e.g. `CommandOrControl+Shift+Space`); empty = off.
  */
-hotkey: string, };
+hotkey: string, 
+/**
+ * Microphone label as the window sees it (e.g. «Микрофон (A4ech FHD 1080P PC Camera)»);
+ * empty — the system default. Matched by label because device ids change.
+ */
+mic_device: string, };

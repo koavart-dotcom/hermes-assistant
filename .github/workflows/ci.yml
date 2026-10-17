@@ -63,6 +63,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -I -m unittest discover -s hermes-plugins/hermes_permissions -p 'test_*.py' -v
+      - run: python -I -m unittest discover -s hermes-plugins/hermes_camera -p 'test_*.py' -v
 
   windows-check:
     name: Windows (cargo check)

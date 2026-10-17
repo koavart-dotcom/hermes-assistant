@@ -100,6 +100,12 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(hp.classify("terminal", {"command": "shutdown /r"}, p).action, "block")
 
 
+class CameraTests(unittest.TestCase):
+    def test_camera_snapshot_runs_without_prompt(self):
+        policy = hp.load_policy(Path(tempfile.mkdtemp()))
+        self.assertEqual(hp.classify("camera_snapshot", {"reason": "посмотри"}, policy).action, "allow")
+
+
 class FileTests(unittest.TestCase):
     def test_write_inside_roots_allowed_outside_confirmed(self):
         p = policy(roots=["C:\\Users\\Koava", "D:\\"] if os.name == "nt" else ["/home/koava", "/data"])

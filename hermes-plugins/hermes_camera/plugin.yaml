@@ -1,0 +1,9 @@
+name: hermes_camera
+version: 0.1.0
+description: >
+  Hermes Assistant eyes: the camera_snapshot tool grabs one frame from the PC
+  webcam (DirectShow through the ffmpeg bundled with Hermes) and returns the
+  file path for vision_analyze. Frames stay local (last 10 kept); HERMES_CAMERA=off
+  disables the camera, HERMES_CAMERA_DEVICE picks a device by name.
+provides_tools:
+  - camera_snapshot

@@ -90,6 +90,8 @@ DEFAULT_TOOLS: dict[str, str] = {
     "web_search": "allow",
     "web_extract": "allow",
     "vision_analyze": "allow",
+    # Webcam frame for vision_analyze (hermes_camera): only on request, logged; camera light shows it.
+    "camera_snapshot": "allow",
     "video_analyze": "allow",
     "browser_snapshot": "allow",
     "browser_navigate": "allow",

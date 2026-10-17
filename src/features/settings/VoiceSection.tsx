@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { api, isTauri } from "@/services/tauri";
+import { listMics } from "@/lib/wav";
 import { useVoiceStore } from "@/stores/voice";
 import type { Prefs } from "@/types/generated/Prefs";
 
@@ -18,6 +19,7 @@ export function VoiceSection() {
   const enabled = isTauri();
   const prefs = useQuery({ queryKey: ["prefs"], queryFn: api.prefsGet, enabled });
   const packs = useQuery({ queryKey: ["voice_packs"], queryFn: api.voicePacks, enabled });
+  const mics = useQuery({ queryKey: ["mics"], queryFn: listMics, enabled: typeof navigator !== "undefined" && !!navigator.mediaDevices });
   const [draft, setDraft] = useState<Prefs | null>(null);
   const [wakeTyped, setWakeText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,19 @@ export function VoiceSection() {
               ))}
             </div>
             {packs.data?.importable.length ? <span className="text-xs text-muted-foreground">Кнопки «+» копируют голоса из Luxify Assistant с этого ПК.</span> : null}
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">Микрофон (уши Джарвиса)</span>
+            <select className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm" value={d.mic_device} onChange={(e) => setDraft({ ...d, mic_device: e.target.value })} aria-label="Микрофон">
+              <option value="">Системный по умолчанию</option>
+              {(mics.data ?? []).map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+              {d.mic_device && !(mics.data ?? []).includes(d.mic_device) ? <option value={d.mic_device}>{d.mic_device} (не подключён)</option> : null}
+            </select>
+            <span className="text-xs text-muted-foreground">Для «Всегда слушает» удобен микрофон веб-камеры, для разговора — гарнитура. Отключённый микрофон заменяется системным.</span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Громкость озвучки: {Math.round(d.voice_volume * 100)} %</span>

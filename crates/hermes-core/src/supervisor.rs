@@ -243,17 +243,13 @@ impl Supervisor {
         if !layout.bootstrap_marker().exists() {
             return Ok(());
         }
-        let src = self
-            .ctx
-            .plugins_dir
-            .join(crate::plugins::PERMISSIONS_PLUGIN);
         let cancel = CancellationToken::new();
         let changed =
-            crate::plugins::install_permissions_plugin(layout, &src, None, &cancel).await?;
+            crate::plugins::install_plugins(layout, &self.ctx.plugins_dir, None, &cancel).await?;
         if changed {
             let gateway = self.gateway();
             if gateway.is_healthy().await {
-                log::info!("permission plugin updated; restarting the Hermes gateway");
+                log::info!("Hermes plugins updated; restarting the Hermes gateway");
                 gateway.stop(None, &cancel).await?;
                 gateway.start(None, &cancel).await?;
             }
