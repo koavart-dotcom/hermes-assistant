@@ -25,6 +25,9 @@ from pathlib import Path
 
 HOST, PORT = "127.0.0.1", 8655
 HERE = Path(__file__).resolve().parent
+# Model files next to the server (D:), licence accepted once at install.
+os.environ.setdefault("TTS_HOME", str(HERE / "models"))
+os.environ.setdefault("COQUI_TOS_AGREED", "1")
 LOG = HERE / "server.log"
 VOICE_DIR = Path(os.environ.get("LOCALAPPDATA", "")) / "ua.koavart.hermes" / "voice-pack" / "Jarvis"
 REF_CLIPS = 8
@@ -89,10 +92,18 @@ def alive() -> bool:
 def ensure_server(wait_s: int = 180) -> None:
     if alive():
         return
-    flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0  # DETACHED_PROCESS | NEW_PROCESS_GROUP
+    # DETACHED_PROCESS | NEW_PROCESS_GROUP, plus CREATE_BREAKAWAY_FROM_JOB: Hermes runs command
+    # providers inside a job object that is torn down after each phrase; the server must outlive it,
+    # otherwise every phrase would reload the model (~80 s).
+    base = 0x00000008 | 0x00000200 if os.name == "nt" else 0
     with open(LOG, "ab") as log:
-        subprocess.Popen([sys.executable, str(Path(__file__)), "serve"], stdout=log, stderr=log,
-                         stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
+        for flags in ((base | 0x01000000, base) if os.name == "nt" else (0,)):
+            try:
+                subprocess.Popen([sys.executable, str(Path(__file__)), "serve"], stdout=log, stderr=log,
+                                 stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
+                break
+            except OSError:
+                continue  # breakaway not allowed by the job: start inside it
     deadline = time.time() + wait_s
     while time.time() < deadline:
         if alive():

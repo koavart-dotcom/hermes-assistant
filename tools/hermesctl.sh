@@ -119,7 +119,7 @@ case "${cmd}" in
   voice-restart) call POST /voice/restart ;;
   voice-speak)   msg="$(printf '%s' "$*" | python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))')"
                  call POST /voice/speak "${msg}" ;;
-  voice-transcribe) f="${1:?wav file}"; body="$(python3 -c 'import base64,json,sys; print(json.dumps({"audio_base64": base64.b64encode(open(sys.argv[1],"rb").read()).decode(), "mime_type": "audio/wav"}))' "$f")"
+  voice-transcribe) f="${1:?wav file}"; tmp="$(mktemp)"; python3 -c 'import base64,json,sys; print(json.dumps({"audio_base64": base64.b64encode(open(sys.argv[1],"rb").read()).decode(), "mime_type": "audio/wav"}))' "$f" > "$tmp"; body="@$tmp"
                  call POST /voice/transcribe "${body}" ;;
   raw)           call "${1:?METHOD}" "${2:?PATH}" "${3:-}" ;;
   *)             die "unknown command: ${cmd}" ;;

@@ -304,7 +304,8 @@ async fn set_many(layout: &Layout, pairs: &[(String, String)]) -> Result<()> {
     let cancel = CancellationToken::new();
     for (k, v) in pairs {
         log::info!("hermes config set {k} {v}");
-        run_hermes(layout, &["config", "set", k, v], None, &cancel).await?;
+        // --force: provider-specific keys like tts.providers.jarvis.* are not in Hermes' schema.
+        run_hermes(layout, &["config", "set", "--force", k, v], None, &cancel).await?;
     }
     Ok(())
 }

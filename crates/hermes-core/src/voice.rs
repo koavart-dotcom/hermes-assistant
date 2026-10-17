@@ -114,6 +114,55 @@ pub fn ensure_cuda_dlls(layout: &Layout) -> Result<usize> {
     Ok(copied)
 }
 
+/// `D:\hermes\jarvis-tts` — the local Jarvis voice (XTTS v2, tools/jarvis-tts).
+pub fn jarvis_tts_dir(layout: &Layout) -> PathBuf {
+    layout
+        .ollama_dir
+        .parent()
+        .map(|p| p.join("jarvis-tts"))
+        .unwrap_or_else(|| layout.ollama_dir.join("..").join("jarvis-tts"))
+}
+
+/// When the Jarvis voice is the selected TTS, start its server ahead of the
+/// first phrase (loading XTTS takes ~20 s). Detached; errors are only logged.
+pub async fn jarvis_tts_warm(layout: &Layout) {
+    if crate::models::current_speech(layout).tts_provider != "jarvis" {
+        return;
+    }
+    let dir = jarvis_tts_dir(layout);
+    let py = dir.join("venv").join("Scripts").join("python.exe");
+    let server = dir.join("server.py");
+    if !py.is_file() || !server.is_file() {
+        return;
+    }
+    if tokio::net::TcpStream::connect(("127.0.0.1", 8655))
+        .await
+        .is_ok()
+    {
+        return;
+    }
+    let log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("server.log"));
+    let mut cmd = std::process::Command::new(&py);
+    cmd.arg(&server).arg("serve").stdin(Stdio::null());
+    if let Ok(f) = log {
+        if let Ok(f2) = f.try_clone() {
+            cmd.stdout(f).stderr(f2);
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000 | 0x0000_0200); // CREATE_NO_WINDOW | NEW_PROCESS_GROUP
+    }
+    match cmd.spawn() {
+        Ok(_) => log::info!("voice: warming up the Jarvis voice server"),
+        Err(e) => log::warn!("voice: Jarvis voice server: {e}"),
+    }
+}
+
 /// The Hermes config keys our shell owns for voice (Russian, local STT).
 pub fn settings() -> Vec<(String, String)> {
     vec![
@@ -200,16 +249,28 @@ impl VoiceServer {
             cancel,
         )
         .await?;
-        for (key, value) in settings() {
+        // Defaults only on the very first setup: later runs (the «Запустить сервер голоса»
+        // button, repairs) must not overwrite what the user chose in Settings — on 17.10 a
+        // re-run reset large-v3-turbo + Jarvis voice back to small + Piper.
+        let marker = ready_marker(&self.layout);
+        if marker.exists() {
             emit(
                 events,
                 SetupEvent::Log {
-                    line: format!("hermes config set {key} {value}"),
+                    line: "voice: settings kept (already configured)".into(),
                 },
             );
-            run_hermes(&self.layout, &["config", "set", &key, &value], None, cancel).await?;
+        } else {
+            for (key, value) in settings() {
+                emit(
+                    events,
+                    SetupEvent::Log {
+                        line: format!("hermes config set {key} {value}"),
+                    },
+                );
+                run_hermes(&self.layout, &["config", "set", &key, &value], None, cancel).await?;
+            }
         }
-        let marker = ready_marker(&self.layout);
         if let Some(p) = marker.parent() {
             std::fs::create_dir_all(p)?;
         }

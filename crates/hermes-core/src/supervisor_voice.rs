@@ -115,6 +115,7 @@ impl Supervisor {
         if let Err(e) = crate::voice::ensure_cuda_dlls(&self.ctx.layout) {
             log::warn!("voice: CUDA DLLs for Whisper: {e}");
         }
+        crate::voice::jarvis_tts_warm(&self.ctx.layout).await;
         if let Some(child) = vs.start().await? {
             let mut c = self
                 .dashboard_child
