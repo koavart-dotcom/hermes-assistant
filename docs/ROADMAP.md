@@ -32,4 +32,7 @@
   `%LOCALAPPDATA%\ua.koavart.hermes\camera`), дальше `vision_analyze` по локальному пути; политика — allow, журнал;
   `HERMES_CAMERA=off` выключает. Снимок ffmpeg на ПК проверен (A4tech FHD, 5 с); через модель — после обновления.
   Выбор микрофона в «Настройках → Голос Джарвиса» (`prefs.mic_device`, по имени устройства, фолбэк — системный).
+- 17.10.2026: v0.25.0 — автотишина на созвонах (`hermes-core::calls`: реестр CapabilityAccessManager, кто держит
+  микрофон/камеру; свои процессы исключены; окно опрашивает раз в 3 с, `prefs.auto_quiet_calls`, Control API `GET /calls`)
+  и экран как второй глаз (`screen_snapshot` в `hermes_camera`: ffmpeg gdigrab, весь экран или активное окно, до 2560 px).
 

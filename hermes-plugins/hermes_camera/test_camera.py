@@ -63,12 +63,31 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(len(left), 10)
             self.assertNotIn("cam-202610100.jpg", left)
 
-    def test_register_declares_tool(self):
+    def test_register_declares_tools(self):
         ctx = mock.Mock()
         cam.register(ctx)
-        kw = ctx.register_tool.call_args.kwargs
-        self.assertEqual(kw["name"], "camera_snapshot")
-        self.assertEqual(kw["toolset"], "camera")
+        names = [c.kwargs["name"] for c in ctx.register_tool.call_args_list]
+        self.assertEqual(names, ["camera_snapshot", "screen_snapshot"])
+        self.assertTrue(all(c.kwargs["toolset"] == "camera" for c in ctx.register_tool.call_args_list))
+
+
+class ScreenTests(unittest.TestCase):
+    def test_window_target_uses_title(self):
+        args, what = cam.screen_args("ffmpeg", Path("o.png"), "window", "Книга1 - Excel")
+        self.assertIn("title=Книга1 - Excel", args)
+        self.assertEqual(what, "окно «Книга1 - Excel»")
+
+    def test_own_window_or_no_title_means_desktop(self):
+        for title in ("Hermes Assistant", ""):
+            args, what = cam.screen_args("ffmpeg", Path("o.png"), "window", title)
+            self.assertIn("desktop", args)
+            self.assertEqual(what, "весь экран")
+        args, _ = cam.screen_args("ffmpeg", Path("o.png"), "screen", "Книга1 - Excel")
+        self.assertIn("desktop", args)
+
+    def test_screen_handler_never_raises(self):
+        with mock.patch.object(cam, "screen", side_effect=RuntimeError("x")):
+            self.assertFalse(json.loads(cam._handle_screen({}))["ok"])
 
 
 if __name__ == "__main__":

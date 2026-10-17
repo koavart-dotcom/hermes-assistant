@@ -20,6 +20,7 @@ import type { SetupPlan } from "@/types/generated/SetupPlan";
 import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
 import type { UpdateInfo } from "@/types/generated/UpdateInfo";
 import type { VoiceStatus } from "@/types/generated/VoiceStatus";
+import type { CallStatus } from "@/types/generated/CallStatus";
 import type { QuickCommandInfo } from "@/types/generated/QuickCommandInfo";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
 import type { QuickRunResult } from "@/types/generated/QuickRunResult";
@@ -84,6 +85,7 @@ export const api = {
   hudWindowClose: () => invoke<void>("hud_window_close"),
 
   digestRun: (telegram: boolean) => invoke<DigestResult>("digest_run", { telegram }),
+  callStatus: () => invoke<CallStatus>("call_status"),
   prefsGet: () => invoke<Prefs>("prefs_get"),
   hotkeyApply: (shortcut: string) => invoke<void>("hotkey_apply", { shortcut }),
   prefsSet: (prefs: Prefs) => invoke<Prefs>("prefs_set", { prefs }),

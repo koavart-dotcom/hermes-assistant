@@ -39,4 +39,8 @@ hotkey: string,
  * Microphone label as the window sees it (e.g. «Микрофон (A4ech FHD 1080P PC Camera)»);
  * empty — the system default. Matched by label because device ids change.
  */
-mic_device: string, };
+mic_device: string, 
+/**
+ * Go quiet while another app holds the mic or the camera (Teams, Telegram, Zoom…).
+ */
+auto_quiet_calls: boolean, };

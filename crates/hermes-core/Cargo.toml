@@ -39,6 +39,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Shutdown",
+    # Call detection: CapabilityAccessManager usage of the mic/webcam (calls.rs).
+    "Win32_System_Registry",
 ] }
 
 [dev-dependencies]

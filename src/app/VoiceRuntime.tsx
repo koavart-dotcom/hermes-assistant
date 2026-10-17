@@ -1,6 +1,6 @@
 import { useEffect } from "react";
-import { emitVoiceState, isTauri, onChatEvent, onHotkey, onHudPtt } from "@/services/tauri";
-import { applyMode, loadPrefs, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
+import { api, emitVoiceState, isTauri, onChatEvent, onHotkey, onHudPtt } from "@/services/tauri";
+import { applyCallStatus, applyMode, loadPrefs, pttStart, pttStop, speakAnswer } from "@/lib/voicePipeline";
 import { dueTime, fireKey, readFired, writeFired } from "@/lib/digest";
 import { runDigest } from "@/lib/digestRun";
 import { useVoiceStore } from "@/stores/voice";
@@ -35,6 +35,24 @@ export function VoiceRuntime() {
       }
     }).then((u) => (unlisten = u));
     return () => unlisten?.();
+  }, []);
+
+  // Auto-quiet on calls: a registry read every 3 s (no camera, no microphone involved).
+  useEffect(() => {
+    if (!isTauri()) return;
+    let busy = false;
+    const id = setInterval(() => {
+      if (busy) return;
+      busy = true;
+      api
+        .callStatus()
+        .then(applyCallStatus)
+        .catch(() => undefined)
+        .finally(() => {
+          busy = false;
+        });
+    }, 3000);
+    return () => clearInterval(id);
   }, []);
 
   // Helpdesk digest on schedule (local time, once per configured time per day).

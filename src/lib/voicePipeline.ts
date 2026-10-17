@@ -7,6 +7,7 @@
 import { api, reportError } from "@/services/tauri";
 import { useChatStore } from "@/stores/chat";
 import { useVoiceStore } from "@/stores/voice";
+import type { CallStatus } from "@/types/generated/CallStatus";
 import type { QuickMatch } from "@/types/generated/QuickMatch";
 import { Segmenter, rms, stripWakeWord } from "@/lib/vad";
 import { TARGET_RATE, downsample, encodeWav, openMic, setPreferredMic, startRecording, toBase64, type Mic, type Recorder } from "@/lib/wav";
@@ -312,7 +313,7 @@ let busy = false;
 let quietUntil = 0;
 
 export async function startWakeListening(): Promise<void> {
-  if (mic) return;
+  if (mic || call.active) return;
   const v = useVoiceStore.getState();
   try {
     let segmenter: Segmenter | null = null;
@@ -397,6 +398,45 @@ useVoiceStore.subscribe((s, prev) => {
   setPreferredMic(s.prefs.mic_device);
   if (mic) void stopWakeListening().then(startWakeListening);
 });
+
+// ------------------------------------------------------------- calls --
+
+/** On a call right now (another app holds the mic/camera); `byUs` — we switched quiet on. */
+let call: { active: boolean; byUs: boolean } = { active: false, byUs: false };
+
+/**
+ * Auto-quiet on calls: when Teams/Telegram/… take the microphone or the camera, stop
+ * talking and close the always-on stream (nothing is transcribed during the call); when
+ * the call ends, return to the previous state. A quiet mode switched on by hand stays.
+ */
+export async function applyCallStatus(status: CallStatus): Promise<void> {
+  const v = useVoiceStore.getState();
+  if (!v.prefs.auto_quiet_calls) status = { in_call: false, apps: [] };
+  if (status.in_call && !call.active) {
+    call = { active: true, byUs: !v.quiet };
+    stopSpeaking();
+    if (call.byUs) v.setQuiet(true);
+    await stopWakeListening();
+    v.setAnswer(`Созвон (${status.apps.join(", ")}) — молчу и не слушаю.`);
+    return;
+  }
+  if (!status.in_call && call.active) {
+    const byUs = call.byUs;
+    call = { active: false, byUs: false };
+    if (byUs) v.setQuiet(false);
+    await applyMode();
+    v.setAnswer(byUs ? "Созвон закончился — снова слушаю." : "Созвон закончился.");
+  }
+}
+
+/** Test hook: forget the call state between tests. */
+export function resetCallState(): void {
+  call = { active: false, byUs: false };
+}
+
+export function inCall(): boolean {
+  return call.active;
+}
 
 /** Load shell preferences into the store (called at start and after Settings saves). */
 export async function loadPrefs(): Promise<void> {

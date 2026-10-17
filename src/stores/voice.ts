@@ -11,6 +11,7 @@ export const DEFAULT_PREFS: Prefs = {
   claude_project: "hermes-assistant",
   hotkey: "CommandOrControl+Shift+Space",
   mic_device: "",
+  auto_quiet_calls: true,
 };
 
 /** How the assistant takes input: text only, push-to-talk, or always listening for a wake word. */

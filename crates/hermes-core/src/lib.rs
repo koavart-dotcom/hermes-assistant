@@ -4,6 +4,7 @@
 pub mod autostart;
 pub mod bootstrap;
 pub mod calendar;
+pub mod calls;
 pub mod chat;
 pub mod cli;
 pub mod control;

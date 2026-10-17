@@ -104,6 +104,7 @@ class CameraTests(unittest.TestCase):
     def test_camera_snapshot_runs_without_prompt(self):
         policy = hp.load_policy(Path(tempfile.mkdtemp()))
         self.assertEqual(hp.classify("camera_snapshot", {"reason": "посмотри"}, policy).action, "allow")
+        self.assertEqual(hp.classify("screen_snapshot", {"target": "window"}, policy).action, "allow")
 
 
 class FileTests(unittest.TestCase):

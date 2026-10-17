@@ -216,6 +216,7 @@ pub fn run() {
             commands::hud_window_open,
             commands::hud_window_close,
             commands::digest_run,
+            commands::call_status,
             commands::prefs_get,
             commands::prefs_set,
             commands::hotkey_apply,

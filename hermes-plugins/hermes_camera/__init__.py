@@ -1,4 +1,4 @@
-"""hermes_camera — the PC webcam as Hermes' eyes.
+"""hermes_camera — the PC webcam and screen as Hermes' eyes.
 
 Installed by Hermes Assistant into ``$HERMES_HOME/plugins/hermes_camera``.
 Registers the ``camera_snapshot`` tool (toolset ``camera``): one frame from the
@@ -12,8 +12,11 @@ looks at it with ``vision_analyze`` (local paths are accepted).
 * ``HERMES_CAMERA_DEVICE`` picks a DirectShow device by (part of) its name;
   default — the first video device.
 
-The gateway runs in the interactive session of the PC user, so the camera is
-reachable; the webcam's own light shows when it is used.
+``screen_snapshot`` (same toolset) grabs the whole desktop or the active window
+with ffmpeg ``gdigrab`` into the same folder, also for ``vision_analyze``.
+
+The gateway runs in the interactive session of the PC user, so the camera and
+the desktop are reachable; the webcam's own light shows when it is used.
 
 Standard library only (the plugin runs inside the Hermes gateway process).
 """
@@ -30,9 +33,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-__all__ = ["register", "snapshot", "parse_devices", "pick_device"]
+__all__ = ["register", "snapshot", "screen", "screen_args", "parse_devices", "pick_device"]
 
 TOOL = "camera_snapshot"
+SCREEN_TOOL = "screen_snapshot"
+# Our own window: «what is on my screen» typed into the chat means the screen, not the chat.
+OWN_WINDOWS = ("Hermes Assistant", "Hermes —", "Джарвис")
 TOOLSET = "camera"
 KEEP = 10
 TIMEOUT_S = 25
@@ -55,6 +61,30 @@ SCHEMA = {
                 "type": "string",
                 "description": "Why the photo is taken, in a few words (shown in the log).",
             }
+        },
+        "required": [],
+    },
+}
+
+
+SCREEN_SCHEMA = {
+    "name": SCREEN_TOOL,
+    "description": (
+        "Take a screenshot of Artem's PC: the whole desktop (all monitors) or the active window. "
+        "Use it when he asks about his screen («что у меня на экране», «прочитай ошибку в этом "
+        "окне», «что в этой таблице», «посмотри на экран»). Returns the file path; then call "
+        "vision_analyze with image_url = that path (use region to zoom into small text). "
+        "Never take screenshots on your own initiative; do not repeat passwords or keys you see."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "target": {
+                "type": "string",
+                "enum": ["screen", "window"],
+                "description": "screen — every monitor; window — only the active window (default screen).",
+            },
+            "reason": {"type": "string", "description": "Why, in a few words (shown in the log)."},
         },
         "required": [],
     },
@@ -109,8 +139,8 @@ def _run(args: list[str], timeout: int) -> subprocess.CompletedProcess:
     return subprocess.run(args, capture_output=True, timeout=timeout, creationflags=flags)
 
 
-def _prune(folder: Path, keep: int = KEEP) -> None:
-    shots = sorted(folder.glob("cam-*.jpg"), key=lambda p: p.stat().st_mtime, reverse=True)
+def _prune(folder: Path, keep: int = KEEP, pattern: str = "cam-*.jpg") -> None:
+    shots = sorted(folder.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
     for old in shots[keep:]:
         try:
             old.unlink()
@@ -155,6 +185,61 @@ def snapshot(reason: str = "") -> dict[str, Any]:
     }
 
 
+def active_window_title() -> str:
+    """Title of the foreground window ('' off Windows or when it has none)."""
+    if os.name != "nt":
+        return ""
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return ""
+    buf = ctypes.create_unicode_buffer(512)
+    user32.GetWindowTextW(hwnd, buf, 512)
+    return buf.value.strip()
+
+
+def screen_args(ffmpeg: str, out: Path, target: str, title: str) -> tuple[list[str], str]:
+    """ffmpeg command and what is captured; our own window or no title → the whole desktop."""
+    window = target == "window" and title and not any(title.startswith(w) for w in OWN_WINDOWS)
+    source = f"title={title}" if window else "desktop"
+    args = [ffmpeg, "-hide_banner", "-loglevel", "error", "-f", "gdigrab", "-framerate", "1",
+            "-i", source, "-frames:v", "1", "-vf", "scale='min(2560,iw)':-2", "-y", str(out)]
+    return args, (f"окно «{title}»" if window else "весь экран")
+
+
+def screen(target: str = "screen", reason: str = "") -> dict[str, Any]:
+    if os.name != "nt":
+        return {"ok": False, "error": "Снимок экрана доступен только на Windows-ПК."}
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        return {"ok": False, "error": "Не найден ffmpeg (ожидался в HERMES_HOME/tools/ffmpeg-*)."}
+    folder = frames_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    out = folder / time.strftime("screen-%Y%m%d-%H%M%S.png")
+    args, what = screen_args(ffmpeg, out, target, active_window_title())
+    try:
+        r = _run(args, TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Снимок экрана не получился за 25 с."}
+    if r.returncode != 0 or not out.is_file():
+        tail = r.stderr.decode("utf-8", "replace").strip().splitlines()[-2:]
+        return {"ok": False, "error": "Не удалось снять экран: " + " ".join(tail)[:300]}
+    _prune(folder, pattern="screen-*.png")
+    return {"ok": True, "path": str(out), "captured": what, "reason": reason,
+            "next": f"Call vision_analyze with image_url={out} to see it."}
+
+
+def _handle_screen(args: dict[str, Any] | None = None, **_: Any) -> str:
+    args = args or {}
+    try:
+        result = screen(str(args.get("target") or "screen"), str(args.get("reason") or ""))
+    except Exception as exc:  # never crash the gateway
+        result = {"ok": False, "error": f"screen_snapshot: {exc}"}
+    return json.dumps(result, ensure_ascii=False)
+
+
 def _handle(args: dict[str, Any] | None = None, **_: Any) -> str:
     args = args or {}
     try:
@@ -172,4 +257,12 @@ def register(ctx) -> None:
         handler=_handle,
         description="Photo from the PC webcam for vision_analyze",
         emoji="📷",
+    )
+    ctx.register_tool(
+        name=SCREEN_TOOL,
+        toolset=TOOLSET,
+        schema=SCREEN_SCHEMA,
+        handler=_handle_screen,
+        description="Screenshot of the PC (desktop or active window) for vision_analyze",
+        emoji="🖥️",
     )

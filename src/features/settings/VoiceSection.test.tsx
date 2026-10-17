@@ -23,6 +23,7 @@ const prefs = {
   claude_project: "hermes-assistant",
   hotkey: "F9",
   mic_device: "",
+  auto_quiet_calls: true,
 };
 
 describe("VoiceSection", () => {

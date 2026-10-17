@@ -33,6 +33,8 @@ pub struct Prefs {
     /// Microphone label as the window sees it (e.g. «Микрофон (A4ech FHD 1080P PC Camera)»);
     /// empty — the system default. Matched by label because device ids change.
     pub mic_device: String,
+    /// Go quiet while another app holds the mic or the camera (Teams, Telegram, Zoom…).
+    pub auto_quiet_calls: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
@@ -76,6 +78,7 @@ impl Default for Prefs {
             claude_project: "hermes-assistant".into(),
             hotkey: "CommandOrControl+Shift+Space".into(),
             mic_device: String::new(),
+            auto_quiet_calls: true,
         }
     }
 }
@@ -155,6 +158,7 @@ mod tests {
             claude_project: "hermes-assistant".into(),
             hotkey: "Ctrl+Alt+J".into(),
             mic_device: "Микрофон (A4ech FHD 1080P PC Camera)".into(),
+            auto_quiet_calls: false,
         };
         let saved = save(&layout, &p).unwrap();
         assert_eq!(saved.voice_volume, 1.0);

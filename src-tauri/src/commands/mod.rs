@@ -474,6 +474,12 @@ pub async fn digest_run(
     state.supervisor.digest_run(telegram).await.map_err(err)
 }
 
+/// Another app holds the microphone or the camera — a call; the window goes quiet.
+#[tauri::command]
+pub fn call_status() -> hermes_core::calls::CallStatus {
+    hermes_core::calls::status()
+}
+
 #[tauri::command]
 pub fn prefs_get(state: State<'_, AppState>) -> Prefs {
     state.supervisor.prefs()

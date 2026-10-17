@@ -128,6 +128,7 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/chat/events", get(chat_events))
         .route("/update/token", axum::routing::put(update_token))
         .route("/voice/status", get(voice_status))
+        .route("/calls", get(calls_status))
         .route("/voice/setup", post(voice_setup))
         .route("/voice/transcribe", post(voice_transcribe))
         .route("/voice/speak", post(voice_speak))
@@ -746,6 +747,11 @@ async fn update_token(
 }
 
 // ----------------------------------------------------------------- voice --
+
+/// Is another app using the microphone or the camera (a call)? See `calls.rs`.
+async fn calls_status() -> Json<crate::calls::CallStatus> {
+    Json(crate::calls::status())
+}
 
 async fn voice_status(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<crate::voice::VoiceStatus>> {
     Ok(Json(ctl.sup.voice_status().await?))

@@ -107,6 +107,10 @@ export function VoiceSection() {
             <Switch checked={d.silent} onCheckedChange={(v) => setDraft({ ...d, silent: v })} aria-label="Тихий режим" />
             <span>Тихий режим: без реакций и озвучки ответов</span>
           </label>
+          <label className="flex items-center gap-2">
+            <Switch checked={d.auto_quiet_calls} onCheckedChange={(v) => setDraft({ ...d, auto_quiet_calls: v })} aria-label="Тишина на созвонах" />
+            <span>Тишина на созвонах: когда Teams, Telegram, Zoom и др. заняли микрофон или камеру — не говорю и не слушаю</span>
+          </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted-foreground">Горячая клавиша «нажми и говори» (из любого окна; пусто — выключена)</span>
             <Input value={d.hotkey} onChange={(e) => setDraft({ ...d, hotkey: e.target.value })} aria-label="Горячая клавиша" placeholder="CommandOrControl+Shift+Space" className="font-mono" />

@@ -123,3 +123,7 @@ tools/hermesctl.sh config-get > /tmp/config.yaml && tools/hermesctl.sh config-pu
 
 Скрипт читает токен с ПК один раз (`ssh main-pc`, файл в профиле Koava) и кэширует в
 `private/control.token`; при 401 кэш сбрасывается.
+
+**Созвоны (с v0.25.0):** `GET /calls` → `CallStatus {in_call, apps}` — какие приложения (кроме наших) сейчас держат
+микрофон или камеру по реестру Windows (`CapabilityAccessManager\ConsentStore`); окно по нему включает тишину.
+
