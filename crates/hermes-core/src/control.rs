@@ -141,6 +141,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/wazuh/integration", get(wazuh_integration))
         .route("/wazuh/alerts", get(wazuh_alerts).post(wazuh_alerts_post))
         .route("/wazuh/incidents", get(wazuh_incidents))
+        .route("/inventory", get(inventory_get).put(inventory_put))
+        .route("/diag/probes", get(diag_probes))
+        .route("/diag/ssh-key", get(diag_ssh_key))
+        .route("/diag/run", post(diag_run))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -418,6 +422,75 @@ async fn wazuh_alerts_post(
 
 async fn wazuh_incidents(State(ctl): State<Arc<Ctl>>) -> Json<Vec<crate::wazuh::Incident>> {
     Json(ctl.sup.wazuh_incidents())
+}
+
+// ------------------------------------------------- inventory and diag --
+
+async fn inventory_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::inventory::Inventory> {
+    Json(crate::inventory::Inventory::load(&ctl.sup.ctx.layout))
+}
+
+async fn inventory_put(
+    State(ctl): State<Arc<Ctl>>,
+    Json(inv): Json<crate::inventory::Inventory>,
+) -> ApiResult<Json<crate::inventory::Inventory>> {
+    inv.save(&ctl.sup.ctx.layout)
+        .map_err(|e| bad_request(e.to_string()))?;
+    Ok(Json(inv))
+}
+
+async fn diag_probes() -> Json<&'static [crate::diag::Probe]> {
+    Json(crate::diag::PROBES)
+}
+
+/// The service public key for `authorized_keys` of `hermes-diag` on Linux hosts.
+async fn diag_ssh_key(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
+    let key = crate::diag::ensure_ssh_key(&ctl.sup.ctx.layout).await?;
+    Ok(Json(json!({ "public_key": key })))
+}
+
+#[derive(Deserialize)]
+struct DiagRun {
+    host: String,
+    /// Probe ids; empty = the base playbook for the host's OS.
+    #[serde(default)]
+    probes: Vec<String>,
+}
+
+/// Run read-only probes on an inventory host by hand (setup checks).
+async fn diag_run(
+    State(ctl): State<Arc<Ctl>>,
+    Json(req): Json<DiagRun>,
+) -> ApiResult<Json<crate::diag::DiagReport>> {
+    let layout = &ctl.sup.ctx.layout;
+    let inv = crate::inventory::Inventory::load(layout);
+    let host = inv.find(&req.host, &req.host).cloned().ok_or_else(|| {
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("{} is not in the inventory", req.host),
+        )
+    })?;
+    let ids: Vec<String> = if req.probes.is_empty() {
+        let base =
+            json!({ "rule": { "level": 0, "id": "manual" }, "agent": { "name": host.name } });
+        let alert = crate::wazuh::Alert::from_value(&base)?;
+        crate::diag::playbook(host.os, &alert)
+            .into_iter()
+            .map(str::to_string)
+            .collect()
+    } else {
+        req.probes
+    };
+    if let Some(bad) = ids
+        .iter()
+        .find(|id| crate::diag::probe(host.os, id).is_none())
+    {
+        return Err(bad_request(format!(
+            "unknown probe `{bad}` for this OS (GET /diag/probes)"
+        )));
+    }
+    let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
+    Ok(Json(crate::diag::run(layout, &host, &refs).await))
 }
 
 async fn prefs_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::prefs::Prefs> {

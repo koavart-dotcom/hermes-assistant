@@ -1,0 +1,20 @@
+# JEA role capability for Hermes read-only diagnostics (docs/DIAG.md).
+# Only what the probe catalogue in crates/hermes-core/src/diag.rs uses is visible;
+# no command can change the machine.
+@{
+    GUID = '7b1f1c1e-3d2a-4f5e-9b7a-2c6d8e4f0a11'
+    Author = 'Hermes Assistant'
+    Description = 'Hermes: read-only diagnostics (disk, services, events, processes)'
+    VisibleCmdlets = @(
+        @{ Name = 'Get-CimInstance'; Parameters = @(
+            @{ Name = 'ClassName'; ValidateSet = 'Win32_OperatingSystem', 'Win32_LogicalDisk', 'Win32_Service' },
+            @{ Name = 'Filter' }
+        ) },
+        'Get-WinEvent',
+        'Get-Process',
+        'Get-Service',
+        'Select-Object',
+        'Sort-Object',
+        'Measure-Object'
+    )
+}

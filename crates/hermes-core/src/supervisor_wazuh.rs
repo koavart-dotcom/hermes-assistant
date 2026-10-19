@@ -12,9 +12,17 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::chat::ChatEvent;
+use crate::diag;
 use crate::digest::{TelegramTarget, send_telegram, telegram_target};
+use crate::inventory::{Access, Inventory};
 use crate::supervisor::Supervisor;
-use crate::wazuh::{self, Alert, Correlated, Incident, WazuhConfig};
+use crate::wazuh::{self, Alert, Correlated, HostContext, Incident, WazuhConfig};
+
+/// Result of [`Supervisor::wazuh_host_context`].
+struct HostInfo {
+    prompt: HostContext,
+    summary: Option<String>,
+}
 use crate::{CoreError, Result};
 
 /// One analysis turn may take this long before it is dropped.
@@ -153,6 +161,7 @@ impl Supervisor {
             return;
         };
         let tg = self.wazuh_telegram(cfg);
+        let cfg_diagnose = cfg.diagnose;
         let sup = self.clone();
         tokio::spawn(async move {
             if let Some(tg) = &tg {
@@ -169,7 +178,11 @@ impl Supervisor {
             if analyze.is_some() {
                 return;
             }
-            let result = sup.wazuh_analyze(&inc).await;
+            let host = sup.wazuh_host_context(&inc, cfg_diagnose).await;
+            if let Some(i) = sup.wazuh_state().get_mut(inc.id) {
+                i.diag = host.summary.clone();
+            }
+            let result = sup.wazuh_analyze(&inc, &host.prompt).await;
             let (state, text) = match result {
                 Ok(t) => ("done", t),
                 Err(e) => {
@@ -193,6 +206,8 @@ impl Supervisor {
                 );
             }
             if let Some(tg) = &tg {
+                let mut inc = inc.clone();
+                inc.diag = finished.as_ref().and_then(|i| i.diag.clone());
                 if let Err(e) = send_telegram(tg, &wazuh::analysis_text(&inc, &text)).await {
                     log::warn!("wazuh: telegram: {e}");
                 }
@@ -200,15 +215,55 @@ impl Supervisor {
         });
     }
 
+    /// Inventory facts and, when allowed, the read-only probes of the alert's playbook.
+    async fn wazuh_host_context(&self, inc: &Incident, diagnose: bool) -> HostInfo {
+        let layout = &self.ctx.layout;
+        let inv = Inventory::load(layout);
+        let Some(host) = inv.find(&inc.agent_name, &inc.agent_ip).cloned() else {
+            return HostInfo {
+                prompt: HostContext::default(),
+                summary: Some(format!("{} нет в инвентаре", inc.agent_name)),
+            };
+        };
+        let about = [
+            (!host.owner.is_empty()).then(|| format!("ответственный {}", host.owner)),
+            (!host.criticality.is_empty()).then(|| format!("критичность {}", host.criticality)),
+            (!host.notes.is_empty()).then(|| host.notes.clone()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("; ");
+        let about = (!about.is_empty()).then_some(about);
+        if !diagnose || host.access == Access::None {
+            return HostInfo {
+                prompt: HostContext { about, diag: None },
+                summary: None,
+            };
+        }
+        let ids = match &inc.sample {
+            Some(a) => diag::playbook(host.os, a),
+            None => Vec::new(),
+        };
+        let report = diag::run(layout, &host, &ids).await;
+        HostInfo {
+            summary: Some(report.summary()),
+            prompt: HostContext {
+                about,
+                diag: Some(report.prompt_text()),
+            },
+        }
+    }
+
     /// One Hermes turn in a new session; returns the final answer text.
-    async fn wazuh_analyze(&self, inc: &Incident) -> Result<String> {
+    async fn wazuh_analyze(&self, inc: &Incident, host: &HostContext) -> Result<String> {
         if let Some(i) = self.wazuh_state().get_mut(inc.id) {
             i.analysis_state = "running".into();
         }
         let client = self.hermes_client()?;
         let title = format!("Wazuh #{} · {} · {}", inc.id, inc.agent_name, inc.rule_id);
         let session = client.create_session(Some(&title)).await?;
-        let prompt = wazuh::analysis_prompt(inc);
+        let prompt = wazuh::analysis_prompt(inc, host);
         let (tx, mut rx) = mpsc::unbounded_channel::<ChatEvent>();
         let cancel = CancellationToken::new();
         let collect = async {

@@ -15,6 +15,7 @@
 #   tools/hermesctl.sh tickets                           # FreeScout: mine + unassigned
 #   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
 #   tools/hermesctl.sh wazuh-config | wazuh-config-put <file> | wazuh-integration | wazuh-incidents | wazuh-alerts [n] | wazuh-test <alert.json>
+#   tools/hermesctl.sh inventory | inventory-put <file> | diag-key | diag-probes | diag-run <host> [probe ...]
 #   tools/hermesctl.sh raw GET /status                   # any endpoint
 #
 # Env: HERMES_PC (ssh host, default main-pc), HERMES_PC_USER_PROFILE
@@ -137,6 +138,12 @@ case "${cmd}" in
   wazuh-incidents) call GET /wazuh/incidents ;;
   wazuh-alerts)  call GET "/wazuh/alerts?limit=${1:-50}" ;;
   wazuh-test)    call POST /wazuh/alerts "@${1:?alert json file}" ;;
+  inventory)     call GET /inventory ;;
+  inventory-put) call PUT /inventory "@${1:?json file}" ;;
+  diag-key)      call GET /diag/ssh-key ;;
+  diag-probes)   call GET /diag/probes ;;
+  diag-run)      h="${1:?host}"; shift; body="$(python3 -c 'import json,sys; print(json.dumps({"host": sys.argv[1], "probes": sys.argv[2:]}))' "$h" "$@")"
+                 call POST /diag/run "$body" ;;
   raw)           call "${1:?METHOD}" "${2:?PATH}" "${3:-}" ;;
   *)             die "unknown command: ${cmd}" ;;
 esac
