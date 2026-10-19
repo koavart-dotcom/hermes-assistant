@@ -204,6 +204,11 @@ impl Supervisor {
         status::snapshot(layout, &self.ctx.pin.version, &ollama, &gateway).await
     }
 
+    /// The gateway and its api_server answer `/health`.
+    pub async fn gateway_healthy(&self) -> bool {
+        self.gateway().is_healthy().await
+    }
+
     /// Start Ollama (if installed) and the Hermes gateway.
     pub async fn gateway_start(&self) -> Result<()> {
         let ollama = Ollama::new(self.ctx.layout.clone());
@@ -336,6 +341,7 @@ mod tests {
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
             skills_dir: PathBuf::from("skills"),
+            server: false,
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

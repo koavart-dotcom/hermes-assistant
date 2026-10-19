@@ -25,3 +25,5 @@ __pycache__/
 
 # Vosk DLLs are fetched by the release workflow
 src-tauri/resources/vosk/*.dll
+# hermesd.exe (server mode) is built by the release workflow
+src-tauri/resources/server/*.exe

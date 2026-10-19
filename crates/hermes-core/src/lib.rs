@@ -24,6 +24,7 @@ pub mod plugins;
 pub mod prefs;
 pub mod quick;
 pub mod secrets;
+pub mod server;
 pub mod setup;
 pub mod status;
 pub mod supervisor;

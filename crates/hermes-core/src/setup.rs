@@ -82,6 +82,9 @@ pub struct SetupContext {
     pub quick_pack: PathBuf,
     /// Bundled Hermes skills (`resources/hermes-skills/`), one dir per skill.
     pub skills_dir: PathBuf,
+    /// Server mode (`hermesd`, Windows service): no Ollama, no local model, no
+    /// login autostart — the service itself keeps the gateway running.
+    pub server: bool,
 }
 
 impl SetupContext {
@@ -177,6 +180,9 @@ async fn run_inner(
         },
     );
     let api_key = secrets::api_server_key(&ctx.layout)?;
+    if ctx.server {
+        return run_server_tail(ctx, &api_key, events, cancel).await;
+    }
     // The Ollama port goes into config.yaml, so choose it before configuring.
     let mut ollama = Ollama::new(ctx.layout.clone());
     ollama.ensure_port(events).await?;
@@ -260,6 +266,48 @@ async fn run_inner(
     Ok(child)
 }
 
+/// Server mode after Hermes is installed: approvals + api_server, our plugins
+/// and skills, then the gateway. The model is set separately (cloud provider
+/// key or Jarvis Deka), so Ollama and the model pull are skipped.
+async fn run_server_tail(
+    ctx: &SetupContext,
+    api_key: &str,
+    events: &EventSender,
+    cancel: &CancellationToken,
+) -> Result<Option<tokio::process::Child>> {
+    hermes_config::apply_pairs(
+        &ctx.layout,
+        hermes_config::base_settings(api_key),
+        events,
+        cancel,
+    )
+    .await?;
+    crate::plugins::install_plugins(&ctx.layout, &ctx.plugins_dir, Some(events), cancel).await?;
+    crate::plugins::sync_all_skills(&ctx.skills_dir, &ctx.layout.hermes_home)?;
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Config,
+        },
+    );
+    emit(
+        events,
+        SetupEvent::StepStarted {
+            step: SetupStep::Gateway,
+        },
+    );
+    Gateway::new(ctx.layout.clone(), Some(api_key.to_string()))
+        .start(Some(events), cancel)
+        .await?;
+    emit(
+        events,
+        SetupEvent::StepFinished {
+            step: SetupStep::Gateway,
+        },
+    );
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,6 +320,7 @@ mod tests {
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
             skills_dir: PathBuf::from("skills"),
+            server: false,
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

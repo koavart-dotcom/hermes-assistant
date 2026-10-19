@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/hermes-core", "src-tauri"]
+members = ["crates/hermes-core", "crates/hermesd", "src-tauri"]
 
 [workspace.package]
-version = "0.26.1"
+version = "0.27.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Artem Kovalenko"]

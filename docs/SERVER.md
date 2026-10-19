@@ -1,0 +1,81 @@
+# Серверный режим (hermesd) — Windows Server 2022
+
+Тот же установщик `Hermes Assistant_x.y_x64-setup.exe`, что и для ПК. Внутри него есть
+`hermesd.exe`: ядро приложения (`crates/hermes-core`) без окна, в виде службы Windows
+«Hermes Assistant Server». Решение — ADR 18.10.2026 в `docs/decisions.md`, этап 9 в `docs/ROADMAP.md`.
+
+## Что делает служба
+
+- При первом запуске ставит Hermes Agent: стадии `install.ps1`, та же закреплённая версия, что на ПК.
+  Ollama, локальные модели, голос и быстрые команды ПК на сервер не ставятся. Если установка
+  упала (например, нет сети), служба повторяет её с паузой 4, 8, 16, 30 мин.
+- Настраивает Hermes: `approvals.mode: manual`, api_server с ключом, наши плагины
+  (`hermes_permissions`) и skills.
+- Раз в минуту проверяет gateway Hermes (`/health` на 8642) и поднимает его, если он упал.
+  Если запуск не удался, пробует снова через 1, 2, 4 … 30 мин.
+- Держит Control API на `127.0.0.1:8645` с теми же маршрутами, что у приложения
+  (`docs/CONTROL_API.md`): статус, установка, `config.yaml`, ключи `.env`, перезапуск gateway,
+  команды `hermes`, журналы, политика разрешений, чат с подтверждениями. Порт 8643 остаётся
+  за приложением, поэтому оба могут работать на одной машине.
+- Когда служба останавливается, она останавливает и gateway.
+
+## Где что лежит
+
+| Что | Путь |
+|---|---|
+| Программа | `C:\Program Files\Hermes Assistant Server\hermesd.exe` + `resources\` |
+| Данные (корень) | `C:\ProgramData\Hermes Assistant Server\`: права только у SYSTEM, Administrators и учётной записи службы |
+| Hermes Agent | `…\Hermes Assistant Server\hermes\` (`HERMES_HOME`) |
+| Ключ Control API | `…\Hermes Assistant Server\ua.koavart.hermes\control.token` |
+| Журнал службы | `…\Hermes Assistant Server\ua.koavart.hermes\logs\hermesd.log` (UTC) |
+
+Корень можно переопределить переменной `HERMES_SERVER_ROOT`, порт Control API — переменной
+`HERMES_CONTROL_PORT` (в окружении службы).
+
+## Установка
+
+1. На сервере запустить установщик под администратором.
+2. На вопрос «Установить Hermes как серверную службу Windows?» ответить «Да». Вопрос задаётся
+   один раз на пользователя и не появляется при автообновлении.
+3. В открывшейся консоли (с запросом UAC) выбрать учётную запись службы:
+   - **Enter** — виртуальная учётка `NT SERVICE\HermesAssistant`: без пароля, право «Вход в
+     качестве службы» получает сама. В сети она выступает как учётка компьютера
+     (`DEKA\SERVER$`), значит доступ по WinRM выдаётся именно ей.
+   - **`DOMAIN\svc-hermes`** — доменная служебная учётка. Консоль спросит пароль. Право «Вход
+     в качестве службы» выдаётся через GPO или `secpol.msc`, иначе служба не стартует
+     (ошибка 1069).
+4. Консоль копирует файлы в Program Files, создаёт службу (автозапуск с задержкой,
+   перезапуск при сбое через 30 с), выставляет права на папку данных и запускает службу.
+
+Вручную, из PowerShell под администратором:
+
+```powershell
+& "$env:LOCALAPPDATA\Hermes Assistant\resources\server\hermesd.exe" install                       # виртуальная учётка
+& "$env:LOCALAPPDATA\Hermes Assistant\resources\server\hermesd.exe" install --account DEKA\svc-hermes
+& "C:\Program Files\Hermes Assistant Server\hermesd.exe" status
+& "C:\Program Files\Hermes Assistant Server\hermesd.exe" uninstall                                 # данные остаются
+& "C:\Program Files\Hermes Assistant Server\hermesd.exe" run                                       # в консоли, для отладки (службу сначала остановить)
+```
+
+**Обновление.** Автообновление обновляет приложение в профиле пользователя, но не службу.
+После обновления нужно ещё раз выполнить `hermesd install` из `resources\server` нового
+приложения: служба остановится, файлы заменятся, служба запустится снова. Самообновление
+службы — следующий шаг.
+
+## Управление без окна
+
+- **С сервера разработки:** `HERMES_TARGET=server HERMES_PC=<сервер> tools/hermesctl.sh status`.
+  Скрипт поднимает SSH-туннель на 8645, а ключ берёт из ProgramData (кэш —
+  `private/control-<сервер>.token`).
+- **Модель:** `tools/hermesctl.sh model-set …` и `key-set ANTHROPIC_API_KEY …`, затем
+  `gateway-restart`. Модель на сервере не выбирается при установке, её задают отдельно.
+- **Из приложения на ПК:** раздел «Серверы» (планируется).
+
+## Ограничения (на 18.10.2026)
+
+- Не проверено на реальном Windows Server: запуск под виртуальной учёткой, `install.ps1` в
+  профиле службы, `hermes gateway start` без интерактивного сеанса.
+- Если на той же машине через окно настроить ещё и «настольный» Hermes, они будут спорить
+  за порт api_server 8642. На сервере окно приложения не настраивать, пока нет раздела «Серверы».
+- Наружу Control API не открыт, доступ только через SSH/RDP. Reverse-proxy с TLS и отдельные
+  ключи «чтение» и «администратор» будут на следующем шаге.

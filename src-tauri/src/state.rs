@@ -47,6 +47,7 @@ impl AppState {
                 plugins_dir,
                 quick_pack,
                 skills_dir,
+                server: false,
             })),
         })
     }

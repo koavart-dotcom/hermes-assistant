@@ -1,0 +1,18 @@
+[package]
+name = "hermesd"
+description = "Hermes Assistant server mode: the core (gateway watchdog + control API) as a Windows service, no window"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+hermes-core = { path = "../hermes-core" }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util.workspace = true
+serde_json.workspace = true
+log = { workspace = true, features = ["std"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8"
+rpassword = "7"

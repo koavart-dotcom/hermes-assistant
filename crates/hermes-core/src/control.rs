@@ -1008,6 +1008,7 @@ mod tests {
             plugins_dir: PathBuf::from("plugins"),
             quick_pack: PathBuf::from("quick.json"),
             skills_dir: PathBuf::from("skills"),
+            server: false,
             pin: Pin {
                 version: "v0".into(),
                 commit: "abc".into(),

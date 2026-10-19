@@ -38,6 +38,14 @@ jobs:
           Expand-Archive $zip "$env:RUNNER_TEMP\vosk"
           Copy-Item "$env:RUNNER_TEMP\vosk\vosk-win64-0.3.45\*.dll" src-tauri/resources/vosk/
           Get-ChildItem src-tauri/resources/vosk
+      # Server mode (docs/SERVER.md): hermesd.exe ships inside the same installer; the
+      # NSIS hook offers to register it as a Windows service.
+      - name: Build hermesd (server mode)
+        shell: pwsh
+        run: |
+          cargo build --release -p hermesd
+          Copy-Item target/release/hermesd.exe src-tauri/resources/server/
+          Get-ChildItem src-tauri/resources/server
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

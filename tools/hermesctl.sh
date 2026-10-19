@@ -18,16 +18,25 @@
 #
 # Env: HERMES_PC (ssh host, default main-pc), HERMES_PC_USER_PROFILE
 # (default C:/Users/Koava), HERMES_CTL_LOCAL_PORT (default 18643).
+# Server mode (hermesd service, docs/SERVER.md): HERMES_TARGET=server HERMES_PC=<server>
+# → port 8645, token from %ProgramData%\Hermes Assistant Server, cached per host.
 set -euo pipefail
 
 HOST="${HERMES_PC:-main-pc}"
 PROFILE="${HERMES_PC_USER_PROFILE:-C:/Users/Koava}"
-LPORT="${HERMES_CTL_LOCAL_PORT:-18643}"
-RPORT=8643
-BASE="http://127.0.0.1:${LPORT}/control/v1"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TOKEN_FILE="${ROOT}/private/control.token"
-REMOTE_TOKEN="${PROFILE}/AppData/Local/ua.koavart.hermes/control.token"
+if [[ "${HERMES_TARGET:-pc}" == "server" ]]; then
+  LPORT="${HERMES_CTL_LOCAL_PORT:-18645}"
+  RPORT=8645
+  TOKEN_FILE="${ROOT}/private/control-${HOST}.token"
+  REMOTE_TOKEN="C:/ProgramData/Hermes Assistant Server/ua.koavart.hermes/control.token"
+else
+  LPORT="${HERMES_CTL_LOCAL_PORT:-18643}"
+  RPORT=8643
+  TOKEN_FILE="${ROOT}/private/control.token"
+  REMOTE_TOKEN="${PROFILE}/AppData/Local/ua.koavart.hermes/control.token"
+fi
+BASE="http://127.0.0.1:${LPORT}/control/v1"
 
 die() { echo "hermesctl: $*" >&2; exit 1; }
 
