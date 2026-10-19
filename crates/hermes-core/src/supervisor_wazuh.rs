@@ -15,6 +15,7 @@ use ts_rs::TS;
 use crate::chat::ChatEvent;
 use crate::diag;
 use crate::digest::{TelegramTarget, send_telegram, telegram_target};
+use crate::fix;
 use crate::inventory::{Access, Inventory};
 use crate::supervisor::Supervisor;
 use crate::wazuh::{self, Alert, Correlated, HostContext, Incident, WazuhConfig};
@@ -249,6 +250,85 @@ impl Supervisor {
                 }
             }
         });
+    }
+
+    /// Plan a fix on an inventory host (nothing runs).
+    pub fn fix_plan(
+        &self,
+        host: &str,
+        action: &str,
+        service: Option<&str>,
+        incident_id: Option<u64>,
+    ) -> Result<(crate::inventory::Host, fix::FixPlan)> {
+        if let Some(id) = incident_id {
+            let inc = self
+                .wazuh_incident(id)
+                .ok_or_else(|| CoreError::Other(format!("incident #{id} not found")))?;
+            if inc.security {
+                return Err(CoreError::Other(format!(
+                    "incident #{id} is a security alert: the agent never fixes those, escalate to people"
+                )));
+            }
+        }
+        let inv = Inventory::load(&self.ctx.layout);
+        let h = inv
+            .find(host, host)
+            .cloned()
+            .ok_or_else(|| CoreError::Other(format!("{host} is not in the inventory")))?;
+        let plan = fix::plan(&h, action, service)?;
+        Ok((h, plan))
+    }
+
+    /// Run a confirmed fix: one at a time per host; result to Telegram when set up.
+    pub async fn fix_run(
+        &self,
+        host: &str,
+        action: &str,
+        service: Option<&str>,
+        incident_id: Option<u64>,
+        by: &str,
+    ) -> Result<fix::FixReport> {
+        let (h, plan) = self.fix_plan(host, action, service, incident_id)?;
+        {
+            let mut busy = self.fix_busy.lock().unwrap_or_else(|e| e.into_inner());
+            if !busy.insert(h.name.clone()) {
+                return Err(CoreError::Other(format!(
+                    "a fix is already running on {}",
+                    h.name
+                )));
+            }
+        }
+        let report = fix::run(&self.ctx.layout, &h, plan, by).await;
+        self.fix_busy
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&h.name);
+        if let Some(tg) = self.wazuh_telegram(&WazuhConfig::load(&self.ctx.layout)) {
+            let text = format!(
+                "{} {} на {}{}{} · {} · {by}",
+                if report.ok { "🔧" } else { "⚠️" },
+                report.plan.title,
+                report.plan.host,
+                report
+                    .plan
+                    .service
+                    .as_deref()
+                    .map(|s| format!(" ({s})"))
+                    .unwrap_or_default(),
+                incident_id
+                    .map(|i| format!(" · инцидент #{i}"))
+                    .unwrap_or_default(),
+                if report.ok {
+                    "выполнено"
+                } else {
+                    "ошибка"
+                },
+            );
+            if let Err(e) = send_telegram(&tg, &text).await {
+                log::warn!("fix: telegram: {e}");
+            }
+        }
+        Ok(report)
     }
 
     /// Inventory facts and, when allowed, the read-only probes of the alert's playbook.

@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { Host } from "@/types/generated/Host";
 import type { Incident } from "@/types/generated/Incident";
+import { FixDialog } from "../FixDialog";
+import { matchHost } from "../matchHost";
 import { api, sampleAlert } from "../api";
 import { ago } from "../format";
 import { ErrorText, Pre, Section } from "../ui";
@@ -23,8 +26,10 @@ function levelClass(level: number) {
   return "text-muted-foreground";
 }
 
-function Row({ inc }: { inc: Incident }) {
+function Row({ inc, hosts }: { inc: Incident; hosts: Host[] }) {
   const [open, setOpen] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const host = matchHost(hosts, inc.agent_name, inc.agent_ip);
   return (
     <li className="rounded-lg border border-border">
       <button
@@ -56,6 +61,24 @@ function Row({ inc }: { inc: Incident }) {
           ) : (
             <p className="text-muted-foreground">Разбора пока нет.</p>
           )}
+          {inc.security ? (
+            <p className="text-sm text-muted-foreground">
+              Алерт безопасности: починка из панели отключена, только эскалация людям.
+            </p>
+          ) : host?.fix && host.access !== "none" ? (
+            <Button size="sm" variant="outline" onClick={() => setFixing(true)}>
+              Починить {host.name}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {host
+                ? "Починка для этого хоста не разрешена (инвентарь)."
+                : "Хоста нет в инвентаре — починка недоступна."}
+            </p>
+          )}
+          {fixing && host ? (
+            <FixDialog host={host} incidentId={inc.id} onClose={() => setFixing(false)} />
+          ) : null}
         </div>
       ) : null}
     </li>
@@ -70,6 +93,7 @@ export function IncidentsPage() {
     queryFn: api.wazuhIncidents,
     refetchInterval: 5000,
   });
+  const inventory = useQuery({ queryKey: ["inventory"], queryFn: api.inventory });
   const test = useMutation({
     mutationFn: () => api.wazuhTest(sampleAlert(host)),
     onSettled: () => qc.invalidateQueries({ queryKey: ["incidents"] }),
@@ -115,7 +139,7 @@ export function IncidentsPage() {
         ) : (
           <ul className="space-y-2">
             {list.map((i) => (
-              <Row key={i.id} inc={i} />
+              <Row key={i.id} inc={i} hosts={inventory.data?.hosts ?? []} />
             ))}
           </ul>
         )}

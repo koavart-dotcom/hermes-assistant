@@ -34,4 +34,13 @@ owner: string,
 /**
  * `low` / `normal` / `high` — shown in the analysis.
  */
-criticality: string, notes: string, };
+criticality: string, notes: string, 
+/**
+ * Fixes from the web panel are allowed on this host (the host must also be
+ * prepared for them: sudoers rules / the HermesFix JEA endpoint).
+ */
+fix: boolean, 
+/**
+ * Services (Linux units / Windows service names) the panel may restart.
+ */
+fix_services: Array<string>, };

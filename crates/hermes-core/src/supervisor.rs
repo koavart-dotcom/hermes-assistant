@@ -55,6 +55,8 @@ pub struct Supervisor {
     pub(crate) wazuh: Mutex<crate::wazuh::WazuhState>,
     /// The running Wazuh ingest listener (server mode), see supervisor_wazuh.rs.
     pub(crate) wazuh_listener: Mutex<Option<CancellationToken>>,
+    /// Hosts with a fix in progress (one at a time per host).
+    pub(crate) fix_busy: Mutex<std::collections::HashSet<String>>,
 }
 
 impl Supervisor {
@@ -78,6 +80,7 @@ impl Supervisor {
             pending_draft: Mutex::new(None),
             wazuh: Mutex::new(crate::wazuh::WazuhState::default()),
             wazuh_listener: Mutex::new(None),
+            fix_busy: Mutex::new(std::collections::HashSet::new()),
         })
     }
 

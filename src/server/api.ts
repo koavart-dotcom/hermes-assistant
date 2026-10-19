@@ -7,6 +7,9 @@
 
 import type { DiagReport } from "@/types/generated/DiagReport";
 import type { EnvKey } from "@/types/generated/EnvKey";
+import type { FixAction } from "@/types/generated/FixAction";
+import type { FixPlan } from "@/types/generated/FixPlan";
+import type { FixReport } from "@/types/generated/FixReport";
 import type { EnvPreset } from "@/types/generated/EnvPreset";
 import type { Incident } from "@/types/generated/Incident";
 import type { IngestOutcome } from "@/types/generated/IngestOutcome";
@@ -81,6 +84,7 @@ async function call<T>(
     method,
     headers: {
       Authorization: `Bearer ${token}`,
+      "X-Hermes-Client": "web-panel",
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -131,6 +135,13 @@ export interface WazuhConfigSaved {
   config: WazuhConfig;
 }
 
+export interface FixRequest {
+  host: string;
+  action: string;
+  service?: string | null;
+  incident_id?: number | null;
+}
+
 export const api = {
   info: (token?: string) => call<ServerInfo>("GET", "/info", undefined, token),
   status: () => call<StatusSnapshot>("GET", "/status"),
@@ -155,6 +166,10 @@ export const api = {
   sshKey: () => call<{ public_key: string }>("GET", "/diag/ssh-key"),
   diagRun: (host: string, probes: string[] = []) =>
     call<DiagReport>("POST", "/diag/run", { host, probes }),
+
+  fixActions: () => call<FixAction[]>("GET", "/fix/actions"),
+  fixPreview: (r: FixRequest) => call<FixPlan>("POST", "/fix/preview", r),
+  fixRun: (r: FixRequest) => call<FixReport>("POST", "/fix/run", { ...r, confirm: true }),
 
   envKeys: () => call<EnvKey[]>("GET", "/hermes/env/keys"),
   envPresets: () => call<EnvPreset[]>("GET", "/hermes/env/presets"),

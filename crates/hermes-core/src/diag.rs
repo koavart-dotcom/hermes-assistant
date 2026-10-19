@@ -365,7 +365,13 @@ pub fn parse_marked(output: &str, probes: &[&Probe]) -> Vec<ProbeResult> {
         .collect()
 }
 
-async fn run_ssh(layout: &Layout, host: &Host, probes: &[&Probe]) -> Result<Vec<ProbeResult>> {
+/// Run `script` on `host` over SSH with the service key (diagnostics and fixes).
+pub async fn ssh_exec(
+    layout: &Layout,
+    host: &Host,
+    script: &str,
+    timeout: Duration,
+) -> Result<std::process::Output> {
     let key = ssh_key(layout);
     if !key.is_file() {
         return Err(CoreError::Other(
@@ -373,17 +379,42 @@ async fn run_ssh(layout: &Layout, host: &Host, probes: &[&Probe]) -> Result<Vec<
         ));
     }
     let known = ssh_dir(layout).join("known_hosts");
-    let script = ssh_script(probes);
     let mut cmd = Command::new("ssh");
-    cmd.args(ssh_args(host, &key, &known, &script))
+    cmd.args(ssh_args(host, &key, &known, script))
         .stdin(Stdio::null())
         .kill_on_drop(true);
     hide_console(&mut cmd);
-    let out = tokio::time::timeout(SSH_TIMEOUT, cmd.output())
+    tokio::time::timeout(timeout, cmd.output())
         .await
-        .map_err(|_| {
-            CoreError::Other(format!("ssh timed out after {}s", SSH_TIMEOUT.as_secs()))
-        })??;
+        .map_err(|_| CoreError::Other(format!("ssh timed out after {}s", timeout.as_secs())))?
+        .map_err(CoreError::from)
+}
+
+/// Run a PowerShell script locally (it remotes into the host itself).
+pub async fn powershell_exec(script: &str, timeout: Duration) -> Result<std::process::Output> {
+    if !cfg!(windows) {
+        return Err(CoreError::Other(
+            "WinRM runs only from the Windows server".into(),
+        ));
+    }
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-EncodedCommand"])
+        .arg(encode_powershell(script))
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    hide_console(&mut cmd);
+    tokio::time::timeout(timeout, cmd.output())
+        .await
+        .map_err(|_| CoreError::Other(format!("timed out after {}s", timeout.as_secs())))?
+        .map_err(CoreError::from)
+}
+
+pub fn clip_output(s: &str, max: usize) -> String {
+    clip(s, max)
+}
+
+async fn run_ssh(layout: &Layout, host: &Host, probes: &[&Probe]) -> Result<Vec<ProbeResult>> {
+    let out = ssh_exec(layout, host, &ssh_script(probes), SSH_TIMEOUT).await?;
     let stdout = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
     if !stdout.contains("@@BEGIN") {
         let err = String::from_utf8_lossy(&out.stderr);

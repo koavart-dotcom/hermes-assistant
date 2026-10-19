@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Stethoscope, Trash2 } from "lucide-react";
+import { Pencil, Plus, Stethoscope, Trash2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { DiagReport } from "@/types/generated/DiagReport";
+import { DiagResult } from "../DiagResult";
+import { FixDialog } from "../FixDialog";
 import type { Host } from "@/types/generated/Host";
 import { api } from "../api";
 import { ErrorText, Field, Pre, Section, Select } from "../ui";
@@ -29,6 +31,8 @@ const EMPTY: Host = {
   owner: "",
   criticality: "normal",
   notes: "",
+  fix: false,
+  fix_services: [],
 };
 
 const ACCESS_LABEL: Record<Host["access"], string> = {
@@ -173,6 +177,33 @@ function HostDialog({
           <Field label="Заметки" hint="Попадают в разбор: что здесь крутится, особенности.">
             <Input value={h.notes} onChange={(e) => set("notes", e.target.value)} />
           </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={h.fix} onChange={(e) => set("fix", e.target.checked)} />
+            Разрешить починку из панели
+          </label>
+          {h.fix ? (
+            <Field
+              label="Службы, которые можно перезапускать"
+              hint={
+                h.os === "windows"
+                  ? "Имена служб через запятую. На машине: windows-setup.ps1 -FixServices с тем же списком."
+                  : "Юниты systemd через запятую. На машине: linux-setup.sh … --fix с тем же списком."
+              }
+            >
+              <Input
+                value={h.fix_services.join(", ")}
+                onChange={(e) =>
+                  set(
+                    "fix_services",
+                    e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+            </Field>
+          ) : null}
           <ErrorText error={error} />
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>
@@ -188,37 +219,13 @@ function HostDialog({
   );
 }
 
-function DiagResult({ report }: { report: DiagReport }) {
-  return (
-    <div className="space-y-2">
-      <p className="text-sm">
-        {report.error ? (
-          <span className="text-destructive">Не подключился: {report.error}</span>
-        ) : (
-          <>
-            {report.host}: {report.results.length} проверок за {report.duration_ms} мс,{" "}
-            {report.results.filter((r) => !r.ok).length} с ошибкой
-          </>
-        )}
-      </p>
-      {report.results.map((r) => (
-        <details key={r.id} className="rounded-lg border border-border">
-          <summary className="cursor-pointer p-2 text-sm">
-            {r.ok ? "✓" : "✗"} {r.title} <span className="text-muted-foreground">({r.id})</span>
-          </summary>
-          <Pre className="m-2 mt-0">{r.output || "(пусто)"}</Pre>
-        </details>
-      ))}
-    </div>
-  );
-}
-
 export function InventoryPage() {
   const qc = useQueryClient();
   const inventory = useQuery({ queryKey: ["inventory"], queryFn: api.inventory });
   const [editing, setEditing] = useState<{ host: Host; index: number } | null>(null);
   const [report, setReport] = useState<DiagReport | null>(null);
   const [key, setKey] = useState<string | null>(null);
+  const [fixing, setFixing] = useState<Host | null>(null);
   const hosts = inventory.data?.hosts ?? [];
 
   const save = useMutation({
@@ -305,6 +312,16 @@ export function InventoryPage() {
                         >
                           <Stethoscope /> Проверить
                         </Button>
+                        {h.fix && h.access !== "none" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setFixing(h)}
+                            title="Действие из каталога починок"
+                          >
+                            <Wrench /> Починить
+                          </Button>
+                        ) : null}
                         <Button
                           size="icon-sm"
                           variant="ghost"
@@ -375,6 +392,8 @@ export function InventoryPage() {
           </p>
         </div>
       </Section>
+
+      {fixing ? <FixDialog host={fixing} onClose={() => setFixing(null)} /> : null}
 
       {editing ? (
         <HostDialog

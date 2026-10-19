@@ -13,6 +13,7 @@ pub mod digest;
 pub mod envkeys;
 pub mod error;
 pub mod events;
+pub mod fix;
 pub mod freescout;
 pub mod gateway;
 pub mod hermes_config;

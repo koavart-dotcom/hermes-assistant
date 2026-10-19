@@ -145,6 +145,9 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/diag/probes", get(diag_probes))
         .route("/diag/ssh-key", get(diag_ssh_key))
         .route("/diag/run", post(diag_run))
+        .route("/fix/actions", get(fix_actions))
+        .route("/fix/preview", post(fix_preview))
+        .route("/fix/run", post(fix_run))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -503,6 +506,55 @@ async fn diag_run(
     }
     let refs: Vec<&str> = ids.iter().map(String::as_str).collect();
     Ok(Json(crate::diag::run(layout, &host, &refs).await))
+}
+
+// ------------------------------------------------------------------ fix --
+
+async fn fix_actions() -> Json<&'static [crate::fix::FixAction]> {
+    Json(crate::fix::ACTIONS)
+}
+
+#[derive(Deserialize)]
+struct FixReq {
+    host: String,
+    action: String,
+    #[serde(default)]
+    service: Option<String>,
+    #[serde(default)]
+    incident_id: Option<u64>,
+    /// `true` only after a person saw the exact command (`/fix/preview`).
+    #[serde(default)]
+    confirm: bool,
+}
+
+async fn fix_preview(
+    State(ctl): State<Arc<Ctl>>,
+    Json(r): Json<FixReq>,
+) -> ApiResult<Json<crate::fix::FixPlan>> {
+    ctl.sup
+        .fix_plan(&r.host, &r.action, r.service.as_deref(), r.incident_id)
+        .map(|(_, p)| Json(p))
+        .map_err(|e| bad_request(e.to_string()))
+}
+
+async fn fix_run(
+    State(ctl): State<Arc<Ctl>>,
+    headers: axum::http::HeaderMap,
+    Json(r): Json<FixReq>,
+) -> ApiResult<Json<crate::fix::FixReport>> {
+    // Who pressed the button, for fix.jsonl and Telegram.
+    let by = match headers.get("x-hermes-client").and_then(|v| v.to_str().ok()) {
+        Some("web-panel") => "веб-панель",
+        _ => "control api",
+    };
+    if !r.confirm {
+        return Err(bad_request("confirm the command first (confirm: true)"));
+    }
+    ctl.sup
+        .fix_run(&r.host, &r.action, r.service.as_deref(), r.incident_id, by)
+        .await
+        .map(Json)
+        .map_err(|e| bad_request(e.to_string()))
 }
 
 async fn prefs_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::prefs::Prefs> {

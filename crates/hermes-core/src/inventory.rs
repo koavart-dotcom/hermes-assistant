@@ -54,6 +54,11 @@ pub struct Host {
     /// `low` / `normal` / `high` — shown in the analysis.
     pub criticality: String,
     pub notes: String,
+    /// Fixes from the web panel are allowed on this host (the host must also be
+    /// prepared for them: sudoers rules / the HermesFix JEA endpoint).
+    pub fix: bool,
+    /// Services (Linux units / Windows service names) the panel may restart.
+    pub fix_services: Vec<String>,
 }
 
 pub const DEFAULT_SSH_USER: &str = "hermes-diag";
@@ -109,6 +114,12 @@ impl Host {
                 self.target()
             )));
         }
+        if let Some(bad) = self.fix_services.iter().find(|s| !safe_service(s)) {
+            return Err(CoreError::Other(format!(
+                "{}: service `{bad}` may contain only letters, digits, . _ - @",
+                self.name
+            )));
+        }
         if !safe_word(self.ssh_user()) || !safe_word(self.jea()) {
             return Err(CoreError::Other(format!(
                 "{}: user / winrm_configuration may contain only letters, digits, . _ -",
@@ -127,6 +138,15 @@ pub fn safe_target(s: &str) -> bool {
         && !s.starts_with('-')
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':'))
+}
+
+/// A systemd unit or Windows service name (`nginx`, `php8.2-fpm`, `getty@tty1`, `W3SVC`).
+pub fn safe_service(s: &str) -> bool {
+    !s.is_empty()
+        && !s.starts_with('-')
+        && s.len() <= 128
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '@'))
 }
 
 pub fn safe_word(s: &str) -> bool {
@@ -252,6 +272,13 @@ mod tests {
         };
         assert!(inv.validate().is_err());
         assert!(safe_target("fe80::1"));
+        assert!(safe_service("php8.2-fpm") && safe_service("getty@tty1"));
+        assert!(!safe_service("nginx; reboot") && !safe_service("--now"));
+        let bad = Host {
+            fix_services: vec!["a b".into()],
+            ..host("x")
+        };
+        assert!(bad.validate().is_err());
         assert!(safe_target("db-01.deka.local"));
     }
 
