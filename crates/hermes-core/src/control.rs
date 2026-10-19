@@ -137,6 +137,10 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/quick/match", post(quick_match))
         .route("/quick/run", post(quick_run))
         .route("/quick/voices/import", post(quick_voices_import))
+        .route("/wazuh/config", get(wazuh_config_get).put(wazuh_config_put))
+        .route("/wazuh/integration", get(wazuh_integration))
+        .route("/wazuh/alerts", get(wazuh_alerts).post(wazuh_alerts_post))
+        .route("/wazuh/incidents", get(wazuh_incidents))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -343,6 +347,77 @@ async fn digest_run(
 ) -> ApiResult<Json<crate::digest::DigestResult>> {
     let req = body.map(|b| b.0).unwrap_or_default();
     Ok(Json(ctl.sup.digest_run(req.telegram).await?))
+}
+
+// ---------------------------------------------------------------- wazuh --
+
+async fn wazuh_config_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::wazuh::WazuhConfig> {
+    Json(crate::wazuh::WazuhConfig::load(&ctl.sup.ctx.layout))
+}
+
+/// Saves the config; the listener (`enabled`, `listen`, `allowed_ips`) picks
+/// changes up after a service restart, the rest applies to the next alert.
+async fn wazuh_config_put(
+    State(ctl): State<Arc<Ctl>>,
+    Json(cfg): Json<crate::wazuh::WazuhConfig>,
+) -> ApiResult<Json<Value>> {
+    let layout = &ctl.sup.ctx.layout;
+    let old = crate::wazuh::WazuhConfig::load(layout);
+    cfg.save(layout).map_err(|e| bad_request(e.to_string()))?;
+    let restart = old.enabled != cfg.enabled
+        || old.listen != cfg.listen
+        || old.allowed_ips != cfg.allowed_ips;
+    Ok(Json(
+        json!({ "ok": true, "restart_required": restart, "config": cfg }),
+    ))
+}
+
+/// What to put into the Wazuh manager's ossec.conf (contains the ingest token).
+async fn wazuh_integration(State(ctl): State<Arc<Ctl>>) -> ApiResult<Json<Value>> {
+    let layout = &ctl.sup.ctx.layout;
+    let cfg = crate::wazuh::WazuhConfig::load(layout);
+    let token = crate::wazuh::ingest_token(layout)?;
+    let port = cfg.listen.rsplit(':').next().unwrap_or("8646").to_string();
+    let hook = format!("http://<this-server>:{port}{}", crate::wazuh::INGEST_PATH);
+    let snippet = format!(
+        "<integration>\n  <name>custom-hermes</name>\n  <hook_url>{hook}</hook_url>\n  <api_key>{token}</api_key>\n  <level>{}</level>\n  <alert_format>json</alert_format>\n</integration>",
+        cfg.min_level
+    );
+    Ok(Json(json!({
+        "enabled": cfg.enabled,
+        "listen": cfg.listen,
+        "hook_url": hook,
+        "api_key": token,
+        "ossec_conf": snippet,
+    })))
+}
+
+#[derive(Deserialize)]
+struct Limit {
+    limit: Option<usize>,
+}
+
+async fn wazuh_alerts(State(ctl): State<Arc<Ctl>>, Query(q): Query<Limit>) -> Json<Vec<Value>> {
+    let path = crate::wazuh::dir(&ctl.sup.ctx.layout).join("alerts.jsonl");
+    Json(crate::wazuh::tail_jsonl(
+        &path,
+        q.limit.unwrap_or(50).min(1000),
+    ))
+}
+
+/// Same as the network listener, behind the control token (tests, replays).
+async fn wazuh_alerts_post(
+    State(ctl): State<Arc<Ctl>>,
+    Json(body): Json<Value>,
+) -> ApiResult<Json<crate::supervisor_wazuh::IngestOutcome>> {
+    ctl.sup
+        .wazuh_ingest(&body)
+        .map(Json)
+        .map_err(|e| bad_request(e.to_string()))
+}
+
+async fn wazuh_incidents(State(ctl): State<Arc<Ctl>>) -> Json<Vec<crate::wazuh::Incident>> {
+    Json(ctl.sup.wazuh_incidents())
 }
 
 async fn prefs_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::prefs::Prefs> {

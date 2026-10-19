@@ -32,8 +32,10 @@ pub mod supervisor_chat;
 pub mod supervisor_quick;
 pub mod supervisor_settings;
 pub mod supervisor_voice;
+pub mod supervisor_wazuh;
 pub mod voice;
 pub mod vosk;
+pub mod wazuh;
 pub mod web;
 
 pub use error::{CoreError, Result};

@@ -14,6 +14,7 @@
 #   tools/hermesctl.sh speech | speech-set small ru piper ru_RU-irina-medium | voice-packs | voice-pack-import Friday
 #   tools/hermesctl.sh tickets                           # FreeScout: mine + unassigned
 #   tools/hermesctl.sh keys | keys-presets | key-set NAME value | key-del NAME | gateway-restart
+#   tools/hermesctl.sh wazuh-config | wazuh-config-put <file> | wazuh-integration | wazuh-incidents | wazuh-alerts [n] | wazuh-test <alert.json>
 #   tools/hermesctl.sh raw GET /status                   # any endpoint
 #
 # Env: HERMES_PC (ssh host, default main-pc), HERMES_PC_USER_PROFILE
@@ -130,6 +131,12 @@ case "${cmd}" in
                  call POST /voice/speak "${msg}" ;;
   voice-transcribe) f="${1:?wav file}"; tmp="$(mktemp)"; python3 -c 'import base64,json,sys; print(json.dumps({"audio_base64": base64.b64encode(open(sys.argv[1],"rb").read()).decode(), "mime_type": "audio/wav"}))' "$f" > "$tmp"; body="@$tmp"
                  call POST /voice/transcribe "${body}" ;;
+  wazuh-config)  call GET /wazuh/config ;;
+  wazuh-config-put) call PUT /wazuh/config "@${1:?json file}" ;;
+  wazuh-integration) call GET /wazuh/integration ;;
+  wazuh-incidents) call GET /wazuh/incidents ;;
+  wazuh-alerts)  call GET "/wazuh/alerts?limit=${1:-50}" ;;
+  wazuh-test)    call POST /wazuh/alerts "@${1:?alert json file}" ;;
   raw)           call "${1:?METHOD}" "${2:?PATH}" "${3:-}" ;;
   *)             die "unknown command: ${cmd}" ;;
 esac

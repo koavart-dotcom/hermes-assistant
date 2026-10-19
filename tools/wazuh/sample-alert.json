@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-10-18T10:00:00.000+0000",
+  "id": "1792310400.1",
+  "rule": {
+    "level": 12,
+    "id": "531",
+    "description": "Partition usage reached 100% (disk space monitor)",
+    "groups": ["ossec", "low_diskspace"]
+  },
+  "agent": { "id": "003", "name": "test-host", "ip": "10.0.0.5" },
+  "manager": { "name": "wazuh-manager" },
+  "location": "df -P",
+  "full_log": "ossec: output: 'df -P': /dev/sda1 51475068 51475068 0 100% /"
+}

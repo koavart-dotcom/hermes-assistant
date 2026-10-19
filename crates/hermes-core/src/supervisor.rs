@@ -51,6 +51,8 @@ pub struct Supervisor {
     pub(crate) last_query: Mutex<Option<String>>,
     /// Conversation id for which a reply draft was requested (see supervisor_quick.rs).
     pub(crate) pending_draft: Mutex<Option<u64>>,
+    /// Wazuh incidents and the analysis budget (see supervisor_wazuh.rs).
+    pub(crate) wazuh: Mutex<crate::wazuh::WazuhState>,
 }
 
 impl Supervisor {
@@ -72,6 +74,7 @@ impl Supervisor {
             voice_setup: Mutex::new(None),
             last_query: Mutex::new(None),
             pending_draft: Mutex::new(None),
+            wazuh: Mutex::new(crate::wazuh::WazuhState::default()),
         })
     }
 
