@@ -53,6 +53,8 @@ pub struct Supervisor {
     pub(crate) pending_draft: Mutex<Option<u64>>,
     /// Wazuh incidents and the analysis budget (see supervisor_wazuh.rs).
     pub(crate) wazuh: Mutex<crate::wazuh::WazuhState>,
+    /// The running Wazuh ingest listener (server mode), see supervisor_wazuh.rs.
+    pub(crate) wazuh_listener: Mutex<Option<CancellationToken>>,
 }
 
 impl Supervisor {
@@ -75,6 +77,7 @@ impl Supervisor {
             last_query: Mutex::new(None),
             pending_draft: Mutex::new(None),
             wazuh: Mutex::new(crate::wazuh::WazuhState::default()),
+            wazuh_listener: Mutex::new(None),
         })
     }
 

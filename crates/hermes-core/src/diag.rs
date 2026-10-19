@@ -13,6 +13,7 @@ use base64::Engine;
 use serde::Serialize;
 use serde_json::json;
 use tokio::process::Command;
+use ts_rs::TS;
 
 use crate::cli::hide_console;
 use crate::inventory::{Access, Host, Os};
@@ -25,7 +26,8 @@ pub const OUTPUT_MAX: usize = 3000;
 const SSH_TIMEOUT: Duration = Duration::from_secs(90);
 const WINRM_TIMEOUT: Duration = Duration::from_secs(45);
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Probe {
     pub id: &'static str,
     pub os: Os,
@@ -198,7 +200,8 @@ pub fn playbook(os: Os, alert: &Alert) -> Vec<&'static str> {
     ids
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct ProbeResult {
     pub id: String,
     pub title: String,
@@ -206,11 +209,13 @@ pub struct ProbeResult {
     pub output: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct DiagReport {
     pub host: String,
     pub target: String,
     pub access: String,
+    #[ts(type = "number")]
     pub duration_ms: u64,
     pub results: Vec<ProbeResult>,
     /// Connection-level failure (no route, auth, timeout); probes are then empty.

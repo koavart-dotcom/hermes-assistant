@@ -83,7 +83,20 @@ pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationTok
             };
             let sup = sup.clone();
             tokio::spawn(async move {
-                if let Err(e) = control::serve(sup, cfg).await {
+                // resources/hermes-skills → resources/server-ui
+                let ui = sup
+                    .ctx
+                    .skills_dir
+                    .parent()
+                    .map(|r| r.join("server-ui"))
+                    .unwrap_or_default();
+                log::info!(
+                    "web panel: http://127.0.0.1:{}{}/ ({})",
+                    cfg.port,
+                    crate::web::BASE,
+                    ui.display()
+                );
+                if let Err(e) = control::serve_with(sup, cfg, crate::web::router(ui)).await {
                     log::error!("control api stopped: {e}");
                 }
             });
@@ -91,17 +104,7 @@ pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationTok
         Err(e) => log::error!("control api disabled, token unavailable: {e}"),
     }
 
-    let wazuh = hermes_core::wazuh::WazuhConfig::load(&layout);
-    if wazuh.enabled {
-        let sup = sup.clone();
-        tokio::spawn(async move {
-            if let Err(e) = hermes_core::wazuh::serve_ingest(sup, wazuh).await {
-                log::error!("wazuh ingest stopped: {e}");
-            }
-        });
-    } else {
-        log::info!("wazuh ingest is off (PUT /control/v1/wazuh/config with enabled: true)");
-    }
+    sup.wazuh_listener_apply();
 
     tokio::spawn(server::watch_gateway(sup.clone(), cancel.clone()));
     cancel.cancelled().await;

@@ -1,6 +1,7 @@
 private/
 node_modules/
 dist/
+dist-server/
 dist-ssr/
 *.local
 target/

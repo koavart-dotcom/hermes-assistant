@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use ts_rs::TS;
 
 use crate::chat::ChatEvent;
 use crate::diag;
@@ -28,10 +29,12 @@ use crate::{CoreError, Result};
 /// One analysis turn may take this long before it is dropped.
 const ANALYSIS_TIMEOUT: Duration = Duration::from_secs(600);
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct IngestOutcome {
     pub received: usize,
     /// Incident ids opened by this push.
+    #[ts(type = "Array<number>")]
     pub new_incidents: Vec<u64>,
     pub repeats: usize,
     /// Below `min_level` or an ignored rule.
@@ -49,6 +52,39 @@ fn now_unix() -> u64 {
 impl Supervisor {
     fn wazuh_state(&self) -> std::sync::MutexGuard<'_, wazuh::WazuhState> {
         self.wazuh.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// (Re)start the Wazuh ingest listener from the saved config: stop the
+    /// running one, start a new one when `enabled`. Server mode only.
+    pub fn wazuh_listener_apply(self: &Arc<Self>) -> bool {
+        let cfg = WazuhConfig::load(&self.ctx.layout);
+        let mut slot = self
+            .wazuh_listener
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(old) = slot.take() {
+            old.cancel();
+        }
+        if !self.ctx.server || !cfg.enabled {
+            log::info!("wazuh ingest is off");
+            return false;
+        }
+        let cancel = CancellationToken::new();
+        *slot = Some(cancel.clone());
+        let sup = self.clone();
+        tokio::spawn(async move {
+            if let Err(e) = wazuh::serve_ingest(sup, cfg, cancel).await {
+                log::error!("wazuh ingest stopped: {e}");
+            }
+        });
+        true
+    }
+
+    pub fn wazuh_listener_running(&self) -> bool {
+        self.wazuh_listener
+            .lock()
+            .map(|s| s.is_some())
+            .unwrap_or(false)
     }
 
     pub fn wazuh_incidents(&self) -> Vec<Incident> {

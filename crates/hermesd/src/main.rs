@@ -12,6 +12,7 @@
 
 mod daemon;
 mod logger;
+mod web;
 #[cfg(windows)]
 mod winsvc;
 

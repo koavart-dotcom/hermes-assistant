@@ -1,0 +1,4 @@
+/* The panel is built with Vite root = src/server, so Tailwind would only scan this
+   folder; the shared components live in src/components. */
+@import "../index.css";
+@source "..";

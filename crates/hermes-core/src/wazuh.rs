@@ -23,6 +23,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use ts_rs::TS;
 
 use crate::supervisor::Supervisor;
 use crate::{CoreError, Layout, Result};
@@ -60,8 +61,9 @@ const SECURITY_GROUPS: &[&str] = &[
 // ---------------------------------------------------------------- config --
 
 /// `<app data>/wazuh/config.json`, edited through `PUT /control/v1/wazuh/config`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct WazuhConfig {
     /// Start the network listener (server mode only; needs a service restart).
     pub enabled: bool,
@@ -73,6 +75,7 @@ pub struct WazuhConfig {
     /// Rule ids that are known noise.
     pub ignore_rules: Vec<String>,
     /// The same host + rule within this many minutes is one incident.
+    #[ts(type = "number")]
     pub window_min: u64,
     /// Ask Hermes for a written analysis of each new incident.
     pub analyze: bool,
@@ -277,8 +280,10 @@ pub fn alerts_in(body: &Value) -> Vec<&Value> {
 
 // -------------------------------------------------------------- incidents --
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Incident {
+    #[ts(type = "number")]
     pub id: u64,
     pub agent_name: String,
     pub agent_ip: String,
@@ -286,11 +291,14 @@ pub struct Incident {
     pub level: u32,
     pub description: String,
     pub security: bool,
+    #[ts(type = "number")]
     pub first_unix: u64,
+    #[ts(type = "number")]
     pub last_unix: u64,
     pub count: u32,
     /// Example alert (the first one), for the analysis prompt.
     #[serde(skip)]
+    #[ts(skip)]
     pub sample: Option<Alert>,
     /// `pending` / `running` / `done` / `failed` / `skipped: <why>` / `off`.
     pub analysis_state: String,
@@ -552,7 +560,11 @@ struct Ingest {
 /// Network listener for the Wazuh manager: `POST /wazuh/v1/alerts` with
 /// `Authorization: Bearer <ingest.token>` from an allowed address. Nothing
 /// else is served on this port.
-pub async fn serve_ingest(sup: Arc<Supervisor>, cfg: WazuhConfig) -> Result<()> {
+pub async fn serve_ingest(
+    sup: Arc<Supervisor>,
+    cfg: WazuhConfig,
+    cancel: tokio_util::sync::CancellationToken,
+) -> Result<()> {
     let token = ingest_token(&sup.ctx.layout)?;
     let addr: SocketAddr = cfg
         .listen
@@ -567,13 +579,27 @@ pub async fn serve_ingest(sup: Arc<Supervisor>, cfg: WazuhConfig) -> Result<()> 
         )
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .with_state(state);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    // A listener being replaced may hold the port for a moment.
+    let mut tries = 0;
+    let listener = loop {
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(l) => break l,
+            Err(e) if tries < 10 => {
+                tries += 1;
+                log::debug!("wazuh ingest bind {addr}: {e}; retrying");
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            }
+            Err(e) => return Err(e.into()),
+        }
+    };
     log::info!("wazuh ingest listening on http://{addr}{INGEST_PATH}");
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(cancel.cancelled_owned())
     .await?;
+    log::info!("wazuh ingest on {addr} stopped");
     Ok(())
 }
 

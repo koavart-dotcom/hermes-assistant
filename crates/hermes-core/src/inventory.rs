@@ -5,19 +5,22 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use crate::{CoreError, Layout, Result};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub enum Os {
     #[default]
     Linux,
     Windows,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub enum Access {
     /// Not reachable for diagnostics (analysis from the alert only).
     #[default]
@@ -28,8 +31,9 @@ pub enum Access {
     Winrm,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Host {
     /// Wazuh `agent.name`.
     pub name: String,
@@ -133,8 +137,9 @@ pub fn safe_word(s: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, TS)]
 #[serde(default)]
+#[ts(export, export_to = "../../src/types/generated/")]
 pub struct Inventory {
     pub hosts: Vec<Host>,
 }

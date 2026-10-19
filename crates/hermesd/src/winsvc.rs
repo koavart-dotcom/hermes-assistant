@@ -33,6 +33,7 @@ const RESOURCE_DIRS: &[&str] = &[
     "hermes-skills",
     "hermes-persona",
     "hermes-quick-commands",
+    "server-ui",
 ];
 
 define_windows_service!(ffi_service_main, service_main);

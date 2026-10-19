@@ -157,8 +157,13 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
 
 /// Bind `127.0.0.1:<port>` and serve until the process exits.
 pub async fn serve(sup: Arc<Supervisor>, cfg: ControlConfig) -> Result<()> {
+    serve_with(sup, cfg, Router::new()).await
+}
+
+/// [`serve`] plus extra routes on the same port (the server's web panel).
+pub async fn serve_with(sup: Arc<Supervisor>, cfg: ControlConfig, extra: Router) -> Result<()> {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], cfg.port));
-    let app = router(sup, cfg);
+    let app = router(sup, cfg).merge(extra);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     log::info!("control api listening on http://{addr}{BASE_PATH}");
     axum::serve(listener, app).await?;
@@ -368,12 +373,19 @@ async fn wazuh_config_put(
     let layout = &ctl.sup.ctx.layout;
     let old = crate::wazuh::WazuhConfig::load(layout);
     cfg.save(layout).map_err(|e| bad_request(e.to_string()))?;
-    let restart = old.enabled != cfg.enabled
+    let changed = old.enabled != cfg.enabled
         || old.listen != cfg.listen
         || old.allowed_ips != cfg.allowed_ips;
-    Ok(Json(
-        json!({ "ok": true, "restart_required": restart, "config": cfg }),
-    ))
+    // The service restarts its listener in place; the desktop app has none.
+    if changed && ctl.sup.ctx.server {
+        ctl.sup.wazuh_listener_apply();
+    }
+    Ok(Json(json!({
+        "ok": true,
+        "restart_required": false,
+        "listening": ctl.sup.wazuh_listener_running(),
+        "config": cfg,
+    })))
 }
 
 /// What to put into the Wazuh manager's ossec.conf (contains the ingest token).
