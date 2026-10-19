@@ -80,7 +80,7 @@ async fn fetch(url: &str, dest: &Path, sha256: &str) -> Result<()> {
 }
 
 /// Extract `zip` into `dest`; `strip_top` drops the archive's top folder.
-fn unzip(zip_path: &Path, dest: &Path, strip_top: bool) -> Result<()> {
+pub(crate) fn unzip(zip_path: &Path, dest: &Path, strip_top: bool) -> Result<()> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path)?)?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;

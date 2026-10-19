@@ -63,3 +63,36 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+      # Server self-update (docs/SERVER.md): hermesd + resources as one signed zip and a
+      # manifest; the service reads releases/latest/download/hermesd.json.
+      - name: Server update package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+          $pkg = "$env:RUNNER_TEMP\hermesd-pkg"
+          $res = "$pkg\resources"
+          New-Item -ItemType Directory -Force $res | Out-Null
+          Copy-Item target/release/hermesd.exe $pkg/
+          Copy-Item -Recurse src-tauri/resources/hermes "$res/hermes"
+          foreach ($p in 'hermes_permissions', 'hermes_camera') {
+            New-Item -ItemType Directory -Force "$res/hermes-plugins/$p" | Out-Null
+            Copy-Item "hermes-plugins/$p/plugin.yaml", "hermes-plugins/$p/__init__.py" "$res/hermes-plugins/$p/"
+          }
+          Copy-Item -Recurse hermes-skills "$res/hermes-skills"
+          New-Item -ItemType Directory -Force "$res/hermes-persona", "$res/hermes-quick-commands" | Out-Null
+          Copy-Item hermes-persona/SOUL.md "$res/hermes-persona/"
+          Copy-Item hermes-quick-commands/default.ru.json "$res/hermes-quick-commands/"
+          Copy-Item -Recurse dist-server "$res/server-ui"
+          $zip = "hermesd-windows-x64.zip"
+          Compress-Archive -Path "$pkg\*" -DestinationPath $zip -Force
+          pnpm tauri signer sign $zip
+          $sig = (Get-Content "$zip.sig" -Raw).Trim()
+          $url = "https://github.com/${{ github.repository }}/releases/download/$tag/$zip"
+          @{ version = $ver; zip = $url; signature = $sig; notes = "Hermes Assistant Server $tag" } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM hermesd.json
+          Get-Content hermesd.json
+          gh release upload $tag $zip hermesd.json --clobber

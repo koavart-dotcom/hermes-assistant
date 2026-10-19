@@ -26,15 +26,9 @@ use windows_service::{define_windows_service, service_dispatcher};
 /// reaches the network as the computer account (DOMAIN\SERVER$).
 pub const VIRTUAL_ACCOUNT: &str = r"NT SERVICE\HermesAssistant";
 
-/// Resource folders the service needs (the Vosk DLLs and the app itself are not copied).
-const RESOURCE_DIRS: &[&str] = &[
-    "hermes",
-    "hermes-plugins",
-    "hermes-skills",
-    "hermes-persona",
-    "hermes-quick-commands",
-    "server-ui",
-];
+/// Exit code after a self-update (ERROR_SERVICE_SPECIFIC_ERROR is reserved; any
+/// non-zero Win32 code triggers the restart action).
+const ERROR_RESTART_FOR_UPDATE: u32 = 1;
 
 define_windows_service!(ffi_service_main, service_main);
 
@@ -99,10 +93,16 @@ fn run_service() -> Result<(), String> {
         0,
     );
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(crate::daemon::run(sup, log_dir, cancel));
+    let restart = rt.block_on(crate::daemon::run(sup, log_dir, cancel));
     report(ServiceState::StopPending, ServiceControlAccept::empty(), 0);
     drop(rt);
-    report(ServiceState::Stopped, ServiceControlAccept::empty(), 0);
+    // A non-zero exit code counts as a failure: the SCM's restart action starts
+    // the new hermesd.exe (failure actions also apply to non-crash failures).
+    report(
+        ServiceState::Stopped,
+        ServiceControlAccept::empty(),
+        if restart { ERROR_RESTART_FOR_UPDATE } else { 0 },
+    );
     Ok(())
 }
 
@@ -155,6 +155,26 @@ fn icacls(dir: &Path, account: &str) -> Result<(), String> {
         .args(["/inheritance:r", "/grant:r"])
         .arg("*S-1-5-18:(OI)(CI)F") // SYSTEM
         .arg("*S-1-5-32-544:(OI)(CI)F") // Administrators
+        .arg(format!("{account}:(OI)(CI)M"))
+        .arg("/T")
+        .arg("/Q")
+        .output()
+        .map_err(|e| format!("icacls: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "icacls {}: {}",
+            dir.display(),
+            String::from_utf8_lossy(&out.stdout).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// Self-update: the service account may replace files in its program folder.
+fn grant_modify(dir: &Path, account: &str) -> Result<(), String> {
+    let out = Command::new("icacls")
+        .arg(dir)
+        .arg("/grant")
         .arg(format!("{account}:(OI)(CI)M"))
         .arg("/T")
         .arg("/Q")
@@ -237,7 +257,7 @@ pub fn install(opts: InstallOptions) -> Result<(), String> {
     if exe != target_exe {
         std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
         std::fs::copy(&exe, &target_exe).map_err(|e| format!("copy hermesd.exe: {e}"))?;
-        for d in RESOURCE_DIRS {
+        for d in server::RESOURCE_DIRS {
             let from = res.join("resources").join(d);
             if from.is_dir() {
                 copy_dir(&from, &target.join("resources").join(d))
@@ -285,8 +305,9 @@ pub fn install(opts: InstallOptions) -> Result<(), String> {
     });
     let _ = service.set_failure_actions_on_non_crash_failures(true);
 
-    // The virtual account exists only once the service does, so the ACL comes last.
+    // The virtual account exists only once the service does, so the ACLs come last.
     icacls(&root, &account)?;
+    grant_modify(&target, &account)?;
 
     service
         .start(&[] as &[&OsStr])

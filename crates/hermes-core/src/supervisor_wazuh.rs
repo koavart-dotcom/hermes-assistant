@@ -252,6 +252,15 @@ impl Supervisor {
         });
     }
 
+    /// A line to the alerts chat (when Telegram is set up for Wazuh).
+    pub async fn notify_telegram(&self, text: &str) {
+        if let Some(tg) = self.wazuh_telegram(&WazuhConfig::load(&self.ctx.layout)) {
+            if let Err(e) = send_telegram(&tg, text).await {
+                log::warn!("telegram: {e}");
+            }
+        }
+    }
+
     /// Plan a fix on an inventory host (nothing runs).
     pub fn fix_plan(
         &self,

@@ -61,6 +61,10 @@ pub struct Supervisor {
     pub(crate) network_app: Mutex<Option<axum::Router>>,
     pub(crate) network_listener: Mutex<Option<CancellationToken>>,
     pub(crate) network_state: Mutex<crate::netaccess::NetworkStatus>,
+    /// Self-update of the service (see server_update.rs).
+    pub(crate) update_state: Mutex<crate::server_update::UpdateStatus>,
+    /// Cancelled when hermesd should exit so the SCM restarts it (after an update).
+    pub restart_requested: CancellationToken,
 }
 
 impl Supervisor {
@@ -88,6 +92,8 @@ impl Supervisor {
             network_app: Mutex::new(None),
             network_listener: Mutex::new(None),
             network_state: Mutex::new(crate::netaccess::NetworkStatus::default()),
+            update_state: Mutex::new(crate::server_update::UpdateStatus::default()),
+            restart_requested: CancellationToken::new(),
         })
     }
 

@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/hermes-core", "crates/hermesd", "src-tauri"]
 
 [workspace.package]
-version = "0.32.0"
+version = "0.33.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Artem Kovalenko"]

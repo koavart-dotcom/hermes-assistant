@@ -30,6 +30,7 @@ pub mod prefs;
 pub mod quick;
 pub mod secrets;
 pub mod server;
+pub mod server_update;
 pub mod setup;
 pub mod status;
 pub mod supervisor;

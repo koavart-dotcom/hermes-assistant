@@ -23,6 +23,7 @@ import type { ModelOption } from "@/types/generated/ModelOption";
 import type { ModelSettings } from "@/types/generated/ModelSettings";
 import type { Probe } from "@/types/generated/Probe";
 import type { StatusSnapshot } from "@/types/generated/StatusSnapshot";
+import type { UpdateStatus } from "@/types/generated/UpdateStatus";
 import type { WazuhConfig } from "@/types/generated/WazuhConfig";
 
 const BASE = "/control/v1";
@@ -172,6 +173,11 @@ export const api = {
   diagRun: (host: string, probes: string[] = []) =>
     call<DiagReport>("POST", "/diag/run", { host, probes }),
 
+  updateStatus: () => call<UpdateStatus>("GET", "/server/update"),
+  updateConfig: (auto: boolean, check_hours: number) =>
+    call<UpdateStatus>("PUT", "/server/update", { auto, check_hours }),
+  updateCheck: () => call<UpdateStatus>("POST", "/server/update/check"),
+  updateApply: () => call<UpdateStatus>("POST", "/server/update/apply"),
   whoami: () => call<Caller>("GET", "/whoami"),
   accessKeys: () => call<AccessKeyInfo[]>("GET", "/access/keys"),
   accessKeyCreate: (name: string, role: Role) =>

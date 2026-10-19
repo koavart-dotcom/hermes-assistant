@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "../api";
 import { ago } from "../format";
+import { UpdateSection } from "../UpdateSection";
 import { ErrorText, Pre, Section } from "../ui";
 
 export function OverviewPage() {
@@ -128,6 +129,7 @@ export function OverviewPage() {
             </dd>
           </dl>
         </Section>
+        <UpdateSection />
       </div>
     </>
   );

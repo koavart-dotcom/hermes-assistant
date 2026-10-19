@@ -57,7 +57,9 @@ fn run_foreground() -> Result<(), String> {
             let _ = tokio::signal::ctrl_c().await;
             stop.cancel();
         });
-        daemon::run(sup, dir, cancel).await;
+        if daemon::run(sup, dir, cancel).await {
+            eprintln!("hermesd: updated on disk; start it again to run the new version");
+        }
     });
     Ok(())
 }

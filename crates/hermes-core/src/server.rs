@@ -21,6 +21,17 @@ pub const SERVICE_DISPLAY_NAME: &str = "Hermes Assistant Server";
 /// Control API port of the service: 8643 stays with the desktop app, so the
 /// two can run on one machine (the app as the administrator's console).
 pub const SERVER_CONTROL_PORT: u16 = 8645;
+/// Resource folders the service needs (copied by `hermesd install`, replaced by the
+/// self-update; the Vosk DLLs and the desktop app are not part of it).
+pub const RESOURCE_DIRS: &[&str] = &[
+    "hermes",
+    "hermes-plugins",
+    "hermes-skills",
+    "hermes-persona",
+    "hermes-quick-commands",
+    "server-ui",
+];
+
 /// How often the gateway health is checked.
 pub const WATCH_INTERVAL: Duration = Duration::from_secs(60);
 

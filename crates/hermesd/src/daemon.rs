@@ -49,9 +49,10 @@ pub fn build_supervisor(res: &Path, root: &Path) -> Result<Arc<Supervisor>, Stri
     })))
 }
 
-/// Run until `cancel`; then stop the gateway (a stopped service means a
-/// stopped agent).
-pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationToken) {
+/// Run until `cancel` (then stop the gateway: a stopped service means a stopped
+/// agent) or until a self-update asks for a restart (returns true; the gateway
+/// keeps running while the new hermesd starts).
+pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationToken) -> bool {
     let layout = sup.ctx.layout.clone();
     log::info!(
         "hermesd {} starting; hermes home {}, data {}",
@@ -116,8 +117,23 @@ pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationTok
 
     sup.wazuh_listener_apply();
 
+    if let Some(notice) = sup.update_on_start() {
+        log::info!("{notice}");
+        sup.notify_telegram(&notice).await;
+    }
     tokio::spawn(server::watch_gateway(sup.clone(), cancel.clone()));
-    cancel.cancelled().await;
+    tokio::spawn(hermes_core::server_update::auto_update_loop(
+        sup.clone(),
+        cancel.clone(),
+    ));
+    tokio::select! {
+        _ = cancel.cancelled() => {}
+        _ = sup.restart_requested.cancelled() => {
+            log::info!("restarting for the update (the gateway keeps running)");
+            cancel.cancel();
+            return true;
+        }
+    }
 
     log::info!("stopping: cancelling setup, stopping the gateway");
     sup.cancel_setup();
@@ -129,6 +145,7 @@ pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationTok
         }
     }
     log::info!("hermesd stopped");
+    false
 }
 
 /// Install Hermes Agent on the first start; retry with a growing pause when the

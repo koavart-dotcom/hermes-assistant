@@ -203,6 +203,9 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
             get(network_config_get).put(network_config_put),
         )
         .route("/network/status", get(network_status))
+        .route("/server/update", get(update_status).put(update_config))
+        .route("/server/update/check", post(update_check))
+        .route("/server/update/apply", post(update_apply))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -665,6 +668,55 @@ async fn network_config_put(
 
 async fn network_status(State(ctl): State<Arc<Ctl>>) -> Json<crate::netaccess::NetworkStatus> {
     Json(ctl.sup.network_status())
+}
+
+// ------------------------------------------------------- server update --
+
+async fn update_status(State(ctl): State<Arc<Ctl>>) -> Json<crate::server_update::UpdateStatus> {
+    Json(ctl.sup.update_status())
+}
+
+#[derive(Deserialize)]
+struct UpdateCfg {
+    auto: bool,
+    check_hours: u32,
+}
+
+async fn update_config(
+    State(ctl): State<Arc<Ctl>>,
+    Json(r): Json<UpdateCfg>,
+) -> ApiResult<Json<crate::server_update::UpdateStatus>> {
+    ctl.sup
+        .update_config_set(r.auto, r.check_hours)
+        .map(Json)
+        .map_err(|e| bad_request(e.to_string()))
+}
+
+async fn update_check(
+    State(ctl): State<Arc<Ctl>>,
+) -> ApiResult<Json<crate::server_update::UpdateStatus>> {
+    ctl.sup.update_check().await?;
+    Ok(Json(ctl.sup.update_status()))
+}
+
+/// Install the newest release now; the service restarts right after answering.
+async fn update_apply(
+    State(ctl): State<Arc<Ctl>>,
+    axum::Extension(caller): axum::Extension<crate::access::Caller>,
+) -> ApiResult<Json<crate::server_update::UpdateStatus>> {
+    let m = ctl
+        .sup
+        .update_check()
+        .await?
+        .ok_or_else(|| bad_request("already the newest version"))?;
+    log::info!("update to {} requested by {}", m.version, caller.name);
+    ctl.sup.update_apply(&m).await?;
+    let sup = ctl.sup.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        sup.request_restart();
+    });
+    Ok(Json(ctl.sup.update_status()))
 }
 
 // ------------------------------------------------------------------ fix --
