@@ -1,4 +1,4 @@
-//! Hermes Agent bootstrap through its own `install.ps1` stage protocol
+//! Hermes Agent bootstrap through its own `install.ps1` / `install.sh` stage protocol
 //! (protocol version 1): `-Manifest` lists the stages, then each stage runs
 //! as `-Stage NAME -NonInteractive -Json` and prints one JSON frame.
 //! This mirrors `apps/bootstrap-installer` (Hermes-Setup, Tauri, MIT).
@@ -100,8 +100,16 @@ impl Installer {
         self.layout.bootstrap_marker().exists()
     }
 
+    /// `install.ps1` through PowerShell on Windows, `install.sh` through bash
+    /// elsewhere: both speak the same stage protocol and take the same flags.
     fn base_command(&self) -> tokio::process::Command {
-        let mut cmd = powershell_script(&self.script);
+        let mut cmd = if cfg!(windows) {
+            powershell_script(&self.script)
+        } else {
+            let mut c = tokio::process::Command::new("bash");
+            c.arg(&self.script);
+            c
+        };
         hermes_env(&mut cmd, &self.layout);
         cmd.env("HERMES_INSTALL_NONINTERACTIVE", "1");
         cmd
@@ -128,11 +136,6 @@ impl Installer {
     /// user input (`setup`, `gateway`) are skipped: our shell configures
     /// Hermes itself afterwards.
     pub async fn install(&self, events: &EventSender, cancel: &CancellationToken) -> Result<()> {
-        if !cfg!(windows) {
-            return Err(CoreError::Other(
-                "Hermes bootstrap is implemented for Windows only".into(),
-            ));
-        }
         let manifest = self.manifest(events, cancel).await?;
         for stage in &manifest.stages {
             if stage.needs_user_input {

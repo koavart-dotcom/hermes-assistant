@@ -1,17 +1,21 @@
 //! hermesd — Hermes Assistant without a window: the hermes-core supervisor in
 //! server mode (Hermes Agent install, gateway watchdog, control API on
-//! 127.0.0.1:8645). On Windows it runs as the service «Hermes Assistant Server».
+//! 127.0.0.1:8645). On Windows it runs as the service «Hermes Assistant Server»,
+//! on macOS as a launchd daemon, on Linux as a systemd unit.
 //!
 //! ```text
 //! hermesd run                     foreground, logs to the console too
-//! hermesd install [--account A]   (admin) copy to Program Files, register and start the service
-//! hermesd uninstall               (admin) stop and remove the service, data stays
+//! hermesd install [--account A]   (admin) Windows: copy to Program Files, register and start the service
+//! hermesd install [--user NAME]   (sudo) macOS / Linux: copy, register the daemon, start it
+//! hermesd uninstall               (admin / sudo) stop and remove the service, data stays
 //! hermesd status                  service state, paths, control API health
-//! hermesd service                 entry point for the Service Control Manager
+//! hermesd service                 entry point for the SCM / launchd / systemd
 //! ```
 
 mod daemon;
 mod logger;
+#[cfg(unix)]
+mod unixsvc;
 mod web;
 #[cfg(windows)]
 mod winsvc;
@@ -42,7 +46,7 @@ pub fn prepare(console: bool) -> Result<(Arc<Supervisor>, PathBuf), String> {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: hermesd run | install [--account DOMAIN\\user] [--interactive] [--pause] | uninstall | status"
+        "usage: hermesd run | install [--account DOMAIN\\user | --user NAME] [--interactive] [--pause] | uninstall | status"
     );
     std::process::exit(2)
 }
@@ -69,6 +73,8 @@ fn status() -> Result<(), String> {
     let layout = server::layout(&root);
     #[cfg(windows)]
     println!("service:     {}", winsvc::query()?);
+    #[cfg(unix)]
+    println!("service:     {}", unixsvc::query());
     println!("data root:   {}", root.display());
     println!("hermes home: {}", layout.hermes_home.display());
     println!(
@@ -102,7 +108,6 @@ fn status() -> Result<(), String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().any(|a| a == name);
-    #[cfg_attr(not(windows), allow(unused_variables))]
     let value = |name: &str| {
         args.iter()
             .position(|a| a == name)
@@ -120,10 +125,14 @@ fn main() {
         }),
         #[cfg(windows)]
         Some("uninstall") => winsvc::uninstall(),
-        #[cfg(not(windows))]
-        Some("service" | "install" | "uninstall") => {
-            Err("the Windows service commands work only on Windows; use `hermesd run`".into())
-        }
+        #[cfg(unix)]
+        Some("service") => unixsvc::service(),
+        #[cfg(unix)]
+        Some("install") => unixsvc::install(unixsvc::InstallOptions {
+            user: value("--user").or_else(|| value("--account")),
+        }),
+        #[cfg(unix)]
+        Some("uninstall") => unixsvc::uninstall(),
         _ => usage(),
     };
     let code = match result {

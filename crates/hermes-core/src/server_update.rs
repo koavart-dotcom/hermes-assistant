@@ -1,15 +1,17 @@
 //! Self-update of the server service (hermesd). Each release publishes
-//! `hermesd-windows-x64.zip` (hermesd.exe + resources) signed with the same
+//! `hermesd-windows-x64.zip` (hermesd.exe + resources) and
+//! `hermesd-macos-arm64.zip` (hermesd + resources), signed with the same
 //! minisign key as the desktop updater, and `hermesd.json` describing it. The
 //! service checks the manifest every few hours; when a newer version is out (and
 //! auto-update is on, or a person pressed «Обновить» in the panel) it downloads
 //! the package, verifies the signature, swaps the files in its Program Files
 //! folder and asks to be restarted (the SCM restarts it with the new exe).
 //!
-//! Windows lets a running exe be renamed, so the swap is: hermesd.exe →
+//! A running exe can be renamed (Windows and Unix alike), so the swap is: hermesd.exe →
 //! hermesd.old.exe, new hermesd.exe in place, resource folders replaced; the old
 //! exe is deleted on the next start. The service account has Modify on its
-//! program folder for this (granted by `hermesd install`).
+//! program folder for this (granted by `hermesd install`; on macOS / Linux the
+//! service user owns it). On macOS / Linux the names are `hermesd`, `hermesd.old`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,11 +25,24 @@ use ts_rs::TS;
 use crate::supervisor::Supervisor;
 use crate::{CoreError, Layout, Result};
 
-pub const MANIFEST_URL: &str =
-    "https://github.com/koavart-dotcom/hermes-assistant/releases/latest/download/hermesd.json";
+const RELEASES: &str =
+    "https://github.com/koavart-dotcom/hermes-assistant/releases/latest/download";
+/// Manifest of this platform's package: `hermesd.json` (Windows, the first
+/// one), `hermesd-macos-arm64.json`, `hermesd-linux-x64.json`.
+pub const MANIFEST_FILE: &str = if cfg!(windows) {
+    "hermesd.json"
+} else if cfg!(target_os = "macos") {
+    "hermesd-macos-arm64.json"
+} else {
+    "hermesd-linux-x64.json"
+};
 /// `plugins.updater.pubkey` of tauri.conf.json (checked by a test).
 pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDNjcyRDRFQUJCNjkyM0IKUldRN2tyYXJUaTFudkUyV09CbzdTQ09zZWczMVBJNlpxYXNZSWkzZTJ6WmpQOHg5aDZSNXlVYisK";
-pub const PACKAGE_EXE: &str = "hermesd.exe";
+pub const PACKAGE_EXE: &str = if cfg!(windows) {
+    "hermesd.exe"
+} else {
+    "hermesd"
+};
 const MAX_PACKAGE: u64 = 300 * 1024 * 1024;
 
 /// `<app data>/update.json`: settings and the version that ran last.
@@ -156,16 +171,20 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// The old exe left by the previous update (deleted at start).
 pub fn old_exe(exe: &Path) -> PathBuf {
-    exe.with_file_name("hermesd.old.exe")
+    exe.with_file_name(if cfg!(windows) {
+        "hermesd.old.exe"
+    } else {
+        "hermesd.old"
+    })
 }
 
 /// Swap the running installation for the unpacked package in `staging`.
 pub fn install_package(staging: &Path, exe: &Path) -> Result<()> {
     let new_exe = staging.join(PACKAGE_EXE);
     if !new_exe.is_file() || !staging.join("resources/hermes/pin.json").is_file() {
-        return Err(CoreError::Other(
-            "package is incomplete (hermesd.exe or resources/hermes missing)".into(),
-        ));
+        return Err(CoreError::Other(format!(
+            "package is incomplete ({PACKAGE_EXE} or resources/hermes missing)"
+        )));
     }
     let dir = exe
         .parent()
@@ -176,7 +195,14 @@ pub fn install_package(staging: &Path, exe: &Path) -> Result<()> {
         .map_err(|e| CoreError::Other(format!("rename {}: {e}", exe.display())))?;
     if let Err(e) = std::fs::copy(&new_exe, exe) {
         let _ = std::fs::rename(&old, exe);
-        return Err(CoreError::Other(format!("copy new hermesd.exe: {e}")));
+        return Err(CoreError::Other(format!("copy new {PACKAGE_EXE}: {e}")));
+    }
+    // Zip entries carry no Unix mode: make the new binary executable.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(exe, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| CoreError::Other(format!("chmod {}: {e}", exe.display())))?;
     }
     for d in crate::server::RESOURCE_DIRS {
         let from = staging.join("resources").join(d);
@@ -239,7 +265,7 @@ fn now_unix() -> u64 {
 }
 
 fn manifest_url() -> String {
-    std::env::var("HERMES_UPDATE_URL").unwrap_or_else(|_| MANIFEST_URL.into())
+    std::env::var("HERMES_UPDATE_URL").unwrap_or_else(|_| format!("{RELEASES}/{MANIFEST_FILE}"))
 }
 
 impl Supervisor {

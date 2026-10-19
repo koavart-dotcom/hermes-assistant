@@ -40,7 +40,11 @@ pub fn build_supervisor(res: &Path, root: &Path) -> Result<Arc<Supervisor>, Stri
         .and_then(|s| serde_json::from_str(&s).map_err(|e| format!("pin.json: {e}")))?;
     Ok(Supervisor::new(Arc::new(SetupContext {
         layout: server::layout(root),
-        script: r.join("hermes/install.ps1"),
+        script: r.join(if cfg!(windows) {
+            "hermes/install.ps1"
+        } else {
+            "hermes/install.sh"
+        }),
         pin,
         plugins_dir: r.join("hermes-plugins"),
         quick_pack: r.join("hermes-quick-commands/default.ru.json"),

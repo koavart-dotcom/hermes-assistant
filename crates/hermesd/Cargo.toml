@@ -1,6 +1,6 @@
 [package]
 name = "hermesd"
-description = "Hermes Assistant server mode: the core (gateway watchdog + control API) as a Windows service, no window"
+description = "Hermes Assistant server mode: the core (gateway watchdog + control API) as a Windows service / launchd daemon / systemd unit, no window"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

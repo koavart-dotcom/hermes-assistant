@@ -22,12 +22,22 @@
 # (default C:/Users/Koava), HERMES_CTL_LOCAL_PORT (default 18643).
 # Server mode (hermesd service, docs/SERVER.md): HERMES_TARGET=server HERMES_PC=<server>
 # → port 8645, token from %ProgramData%\Hermes Assistant Server, cached per host.
+# Mac server: HERMES_TARGET=mac (host `mac` by default) → token from /usr/local/var/hermes-server.
 set -euo pipefail
 
 HOST="${HERMES_PC:-main-pc}"
 PROFILE="${HERMES_PC_USER_PROFILE:-C:/Users/Koava}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ "${HERMES_TARGET:-pc}" == "server" ]]; then
+REMOTE_SHELL=powershell
+if [[ "${HERMES_TARGET:-pc}" == "mac" ]]; then
+  # macOS server (launchd daemon, docs/SERVER.md «macOS»): ssh as the service user.
+  [[ -n "${HERMES_PC:-}" ]] || HOST=mac
+  LPORT="${HERMES_CTL_LOCAL_PORT:-18645}"
+  RPORT=8645
+  TOKEN_FILE="${ROOT}/private/control-${HOST}.token"
+  REMOTE_TOKEN="/usr/local/var/hermes-server/ua.koavart.hermes/control.token"
+  REMOTE_SHELL=sh
+elif [[ "${HERMES_TARGET:-pc}" == "server" ]]; then
   LPORT="${HERMES_CTL_LOCAL_PORT:-18645}"
   RPORT=8645
   TOKEN_FILE="${ROOT}/private/control-${HOST}.token"
@@ -53,9 +63,14 @@ tunnel_up() {
 token() {
   if [[ ! -s "${TOKEN_FILE}" ]]; then
     mkdir -p "$(dirname "${TOKEN_FILE}")"
-    ssh -o ConnectTimeout=10 "${HOST}" \
-      "powershell -NoProfile -Command \"Get-Content -Raw '${REMOTE_TOKEN//\//\\}'\"" 2>/dev/null \
-      | tr -d '\r\n' > "${TOKEN_FILE}" || true
+    if [[ "${REMOTE_SHELL}" == sh ]]; then
+      ssh -o ConnectTimeout=10 "${HOST}" "cat '${REMOTE_TOKEN}'" 2>/dev/null \
+        | tr -d '\r\n' > "${TOKEN_FILE}" || true
+    else
+      ssh -o ConnectTimeout=10 "${HOST}" \
+        "powershell -NoProfile -Command \"Get-Content -Raw '${REMOTE_TOKEN//\//\\}'\"" 2>/dev/null \
+        | tr -d '\r\n' > "${TOKEN_FILE}" || true
+    fi
     [[ -s "${TOKEN_FILE}" ]] || die "cannot read ${REMOTE_TOKEN} on ${HOST} (is the app installed and started once?)"
     chmod 600 "${TOKEN_FILE}"
   fi

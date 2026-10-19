@@ -8,6 +8,8 @@ use crate::{CoreError, Layout, Result};
 
 const SERVICE: &str = "Hermes";
 const API_KEY_USER: &str = "api_server_key";
+/// Set by the macOS / Linux service definition: secrets as files only.
+pub const FILE_ONLY_ENV: &str = "HERMES_SECRETS_FILE_ONLY";
 
 pub fn generate_key() -> Result<String> {
     let mut buf = [0u8; 32];
@@ -37,6 +39,11 @@ fn write_fallback(path: &Path, key: &str) -> Result<()> {
 /// Return the api_server key, creating and storing it on first use.
 pub fn api_server_key(layout: &Layout) -> Result<String> {
     let fallback = fallback_path(layout);
+    // The macOS / Linux service (launchd daemon, systemd unit) has no login
+    // keychain or secret service: the key lives in its data root (mode 700).
+    if std::env::var_os(FILE_ONLY_ENV).is_some() {
+        return file_only(&fallback);
+    }
     match keyring::Entry::new(SERVICE, API_KEY_USER) {
         Ok(entry) => match entry.get_password() {
             Ok(k) if !k.is_empty() => Ok(k),

@@ -1,4 +1,5 @@
-//! Server mode (`hermesd`, a Windows service on Windows Server): where its data
+//! Server mode (`hermesd`: a Windows service on Windows Server, a launchd
+//! daemon on macOS, a systemd unit on Linux): where its data
 //! lives and the loop that keeps the Hermes gateway up without a logged-in user.
 //!
 //! The desktop app keeps everything in the user's `%LOCALAPPDATA%`; the service
@@ -35,15 +36,36 @@ pub const RESOURCE_DIRS: &[&str] = &[
 /// How often the gateway health is checked.
 pub const WATCH_INTERVAL: Duration = Duration::from_secs(60);
 
-/// `HERMES_SERVER_ROOT` or `%ProgramData%\Hermes Assistant Server`.
+/// launchd label / systemd unit name of the service on macOS and Linux.
+pub const UNIX_SERVICE_ID: &str = "ua.koavart.hermesd";
+
+/// `HERMES_SERVER_ROOT`, or the platform default: `%ProgramData%\Hermes
+/// Assistant Server` on Windows, `/usr/local/var/hermes-server` on macOS,
+/// `/var/lib/hermes-server` on Linux (no spaces: Hermes' shell installer and
+/// uv run there).
 pub fn server_root() -> PathBuf {
     if let Some(p) = std::env::var_os("HERMES_SERVER_ROOT") {
         return PathBuf::from(p);
     }
-    let program_data = std::env::var_os("ProgramData")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
-    program_data.join(SERVICE_DISPLAY_NAME)
+    if cfg!(windows) {
+        let program_data = std::env::var_os("ProgramData")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
+        program_data.join(SERVICE_DISPLAY_NAME)
+    } else if cfg!(target_os = "macos") {
+        PathBuf::from("/usr/local/var/hermes-server")
+    } else {
+        PathBuf::from("/var/lib/hermes-server")
+    }
+}
+
+/// Where `hermesd install` puts the program on macOS / Linux.
+pub fn unix_program_dir() -> PathBuf {
+    if cfg!(target_os = "macos") {
+        PathBuf::from("/usr/local/hermes-server")
+    } else {
+        PathBuf::from("/opt/hermes-server")
+    }
 }
 
 /// Layout of the service: Hermes home, our data and downloads all under `root`.

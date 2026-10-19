@@ -1,4 +1,4 @@
-# Серверный режим (hermesd) — Windows Server 2022
+# Серверный режим (hermesd) — Windows Server 2022 (и Mac для тестов)
 
 Тот же установщик `Hermes Assistant_x.y_x64-setup.exe`, что и для ПК. Внутри него есть
 `hermesd.exe`: ядро приложения (`crates/hermes-core`) без окна, в виде службы Windows
@@ -141,6 +141,61 @@ New-NetFirewallRule -DisplayName "Hermes panel HTTPS" -Direction Inbound -Protoc
 запущенный на этой же машине (`hermesd run`). Сборка: `pnpm build` собирает и окно приложения,
 и `dist-server/`. Установщик кладёт `dist-server/` в `resources/server-ui/`, а `hermesd install`
 копирует её в Program Files.
+
+## macOS (Mac mini) — тестовый стенд
+
+С v0.34.0 та же служба собирается для Mac на Apple Silicon. Это launchd-демон
+`ua.koavart.hermesd`. Решение — ADR 19.10.2026 в `docs/decisions.md`. Подходит для проверки
+Linux-части: приём алертов, разбор, панель, диагностика и починка Linux-машин по SSH.
+**Windows-машины с Мака не диагностируются**: нет WinRM/JEA и доменной учётки, и служба
+отвечает «WinRM runs only from the Windows server». Для этого остаётся Windows Server.
+
+| Что | Путь |
+|---|---|
+| Программа | `/usr/local/hermes-server/hermesd` + `resources/` (владелец — учётка службы, для самообновления) |
+| Данные (корень) | `/usr/local/var/hermes-server/` (права 700, владелец — учётка службы) |
+| HOME службы | `/usr/local/var/hermes-server/home`. Свой HOME, поэтому `~/.hermes` и `~/.local/bin` пользователя не трогаются |
+| Ключ Control API | `/usr/local/var/hermes-server/ua.koavart.hermes/control.token` |
+| Журнал | `…/ua.koavart.hermes/logs/hermesd.log`, вывод процесса — `hermesd.stdout.log` |
+| Описание демона | `/Library/LaunchDaemons/ua.koavart.hermesd.plist` |
+
+**Установка:** одна команда в терминале на Маке, sudo спросит пароль:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/koavart-dotcom/hermes-assistant/main/tools/server/install-macos.sh | bash
+```
+
+Скрипт берёт `hermesd-macos-arm64.zip` из последнего релиза и запускает
+`sudo hermesd install --user <текущий пользователь>`. Демон работает от этого пользователя,
+не от root. Запуск при загрузке; при сбое перезапуск через 30 с
+(`KeepAlive.SuccessfulExit=false`).
+
+- Hermes Agent ставится его собственным `install.sh` с той же закреплённой версией и теми
+  же стадиями, что `install.ps1`. Нужны git и curl: на Маке это Command Line Tools
+  (`xcode-select --install`).
+- Gateway на Маке запускает сама служба: `hermes gateway run --replace --external-supervisor`
+  в отдельной группе процессов, pid лежит в `gateway.pid`. Сторож поднимает его, если он упал.
+  При остановке службы gateway получает SIGTERM. При перезапуске ради обновления gateway
+  продолжает работать (`AbandonProcessGroup`).
+- Ключ api_server хранится файлом в папке данных (`HERMES_SECRETS_FILE_ONLY=1`). У демона
+  нет связки ключей пользователя.
+- Самообновление работает так же, как на Windows: манифест `hermesd-macos-arm64.json`, файлы
+  `hermesd` → `hermesd.old`, после замены выход с кодом 1, и launchd поднимает новую версию.
+- Управление: `HERMES_TARGET=mac tools/hermesctl.sh status`. Это SSH-туннель на 8645, ключ
+  читается по SSH. Панель: `http://127.0.0.1:8645/ui/` на самом Маке или по сети через
+  HTTPS (раздел «Доступ»).
+- Чтобы стенд не засыпал: «Системные настройки → Энергосбережение → не переходить в режим
+  сна», или `sudo pmset -a sleep 0 disksleep 0`.
+
+```bash
+sudo /usr/local/hermes-server/hermesd status
+sudo /usr/local/hermes-server/hermesd uninstall      # данные и программа остаются
+sudo launchctl kickstart -k system/ua.koavart.hermesd  # перезапуск
+```
+
+Тот же код работает и на Linux как systemd-юнит (`/opt/hermes-server`,
+`/var/lib/hermes-server`, `sudo hermesd install --user NAME`). Готовый пакет для Linux пока
+не публикуется.
 
 ## Управление без окна
 

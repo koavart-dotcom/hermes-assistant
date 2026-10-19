@@ -64,6 +64,12 @@ impl Layout {
             }
             self.hermes_bin.join("hermes.cmd")
         } else {
+            // install.sh publishes the launchers inside the checkout
+            // (`<install_dir>/.hermes/bin`) and only links them into ~/.local/bin.
+            let own = self.install_dir.join(".hermes").join("bin").join("hermes");
+            if own.exists() {
+                return own;
+            }
             self.hermes_bin.join("hermes")
         }
     }

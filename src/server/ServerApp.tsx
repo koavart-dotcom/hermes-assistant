@@ -78,12 +78,12 @@ function Login({ onDone }: { onDone: () => void }) {
           <h1 className="text-lg font-semibold">Hermes Server</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Ключ доступа от администратора. На самом сервере подходит и мастер-ключ: файл{" "}
-            <code className="text-xs">control.token</code> в
+            <code className="text-xs">control.token</code> в{" "}
             <code className="text-xs">
-              {" "}
               C:\ProgramData\Hermes Assistant Server\ua.koavart.hermes\
             </code>{" "}
-            на сервере.
+            (Windows) или{" "}
+            <code className="text-xs">/usr/local/var/hermes-server/ua.koavart.hermes/</code> (Mac).
           </p>
         </div>
         <Input

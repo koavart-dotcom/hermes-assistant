@@ -80,3 +80,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: cargo check --workspace --all-targets
+
+  macos-server:
+    name: macOS server (hermesd clippy, tests)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p hermesd -p hermes-core --all-targets -- -D warnings
+      - run: cargo test -p hermesd -p hermes-core

@@ -96,3 +96,53 @@ jobs:
           @{ version = $ver; zip = $url; signature = $sig; notes = "Hermes Assistant Server $tag" } | ConvertTo-Json | Set-Content -Encoding utf8NoBOM hermesd.json
           Get-Content hermesd.json
           gh release upload $tag $zip hermesd.json --clobber
+
+  server-macos:
+    # Hermes Assistant Server on a Mac (launchd daemon, docs/SERVER.md): hermesd + resources
+    # as a signed zip and a manifest; the daemon reads hermesd-macos-arm64.json.
+    name: Server package (macOS arm64)
+    needs: build
+    permissions:
+      contents: write
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vite build -c vite.server.config.ts
+      - run: cargo build --release -p hermesd
+      - name: Package, sign, upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          pkg="$RUNNER_TEMP/hermesd-pkg"
+          res="$pkg/resources"
+          mkdir -p "$res/hermes-persona" "$res/hermes-quick-commands"
+          cp target/release/hermesd "$pkg/"
+          cp -R src-tauri/resources/hermes "$res/hermes"
+          for p in hermes_permissions hermes_camera; do
+            mkdir -p "$res/hermes-plugins/$p"
+            cp "hermes-plugins/$p/plugin.yaml" "hermes-plugins/$p/__init__.py" "$res/hermes-plugins/$p/"
+          done
+          cp -R hermes-skills "$res/hermes-skills"
+          cp hermes-persona/SOUL.md "$res/hermes-persona/"
+          cp hermes-quick-commands/default.ru.json "$res/hermes-quick-commands/"
+          cp -R dist-server "$res/server-ui"
+          zip="hermesd-macos-arm64.zip"
+          (cd "$pkg" && zip -qr "$GITHUB_WORKSPACE/$zip" .)
+          pnpm tauri signer sign "$zip"
+          url="https://github.com/${{ github.repository }}/releases/download/$tag/$zip"
+          jq -n --arg v "${tag#v}" --arg z "$url" --rawfile s "$zip.sig" --arg n "Hermes Assistant Server $tag (macOS)" \
+            '{version: $v, zip: $z, signature: ($s | rtrimstr("\n")), notes: $n}' > hermesd-macos-arm64.json
+          cat hermesd-macos-arm64.json
+          gh release upload "$tag" "$zip" hermesd-macos-arm64.json --clobber
