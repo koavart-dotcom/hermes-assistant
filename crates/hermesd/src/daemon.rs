@@ -80,16 +80,26 @@ pub async fn run(sup: Arc<Supervisor>, log_dir: PathBuf, cancel: CancellationTok
                 app_name: server::SERVICE_DISPLAY_NAME.into(),
                 app_version: env!("CARGO_PKG_VERSION").into(),
                 log_dir,
+                accept_master: true,
             };
+            // resources/hermes-skills → resources/server-ui
+            let ui = sup
+                .ctx
+                .skills_dir
+                .parent()
+                .map(|r| r.join("server-ui"))
+                .unwrap_or_default();
+            // HTTPS from the network: same panel and API, named keys only.
+            let net_cfg = ControlConfig {
+                accept_master: false,
+                ..cfg.clone()
+            };
+            sup.set_network_app(
+                control::router(sup.clone(), net_cfg).merge(crate::web::router(ui.clone())),
+            );
+            sup.network_apply().await;
             let sup = sup.clone();
             tokio::spawn(async move {
-                // resources/hermes-skills → resources/server-ui
-                let ui = sup
-                    .ctx
-                    .skills_dir
-                    .parent()
-                    .map(|r| r.join("server-ui"))
-                    .unwrap_or_default();
                 log::info!(
                     "web panel: http://127.0.0.1:{}{}/ ({})",
                     cfg.port,

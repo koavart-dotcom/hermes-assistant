@@ -163,6 +163,7 @@ pub fn run() {
                         app_name: pkg.name.clone(),
                         app_version: pkg.version.to_string(),
                         log_dir: app.path().app_log_dir().unwrap_or_default(),
+                        accept_master: true,
                     };
                     tauri::async_runtime::spawn(async move {
                         if let Err(e) = control::serve(sup, cfg).await {

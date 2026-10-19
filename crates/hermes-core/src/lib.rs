@@ -1,6 +1,7 @@
 //! Core logic of the Hermes shell. No Tauri dependency: everything here is
 //! testable with plain `cargo test` and reused by the Tauri commands.
 
+pub mod access;
 pub mod autostart;
 pub mod bootstrap;
 pub mod calendar;
@@ -21,6 +22,7 @@ pub mod inventory;
 pub mod jira;
 pub mod mail;
 pub mod models;
+pub mod netaccess;
 pub mod ollama;
 pub mod paths;
 pub mod plugins;
@@ -32,6 +34,7 @@ pub mod setup;
 pub mod status;
 pub mod supervisor;
 pub mod supervisor_chat;
+pub mod supervisor_network;
 pub mod supervisor_quick;
 pub mod supervisor_settings;
 pub mod supervisor_voice;

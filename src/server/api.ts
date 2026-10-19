@@ -5,7 +5,12 @@
  * (sessionStorage) unless «запомнить» puts it in localStorage.
  */
 
+import type { AccessKeyInfo } from "@/types/generated/AccessKeyInfo";
+import type { Caller } from "@/types/generated/Caller";
 import type { DiagReport } from "@/types/generated/DiagReport";
+import type { NetworkConfig } from "@/types/generated/NetworkConfig";
+import type { NetworkStatus } from "@/types/generated/NetworkStatus";
+import type { Role } from "@/types/generated/Role";
 import type { EnvKey } from "@/types/generated/EnvKey";
 import type { FixAction } from "@/types/generated/FixAction";
 import type { FixPlan } from "@/types/generated/FixPlan";
@@ -166,6 +171,16 @@ export const api = {
   sshKey: () => call<{ public_key: string }>("GET", "/diag/ssh-key"),
   diagRun: (host: string, probes: string[] = []) =>
     call<DiagReport>("POST", "/diag/run", { host, probes }),
+
+  whoami: () => call<Caller>("GET", "/whoami"),
+  accessKeys: () => call<AccessKeyInfo[]>("GET", "/access/keys"),
+  accessKeyCreate: (name: string, role: Role) =>
+    call<{ info: AccessKeyInfo; key: string }>("POST", "/access/keys", { name, role }),
+  accessKeyDelete: (id: string) =>
+    call<unknown>("DELETE", `/access/keys/${encodeURIComponent(id)}`),
+  networkConfig: () => call<NetworkConfig>("GET", "/network/config"),
+  networkConfigSave: (c: NetworkConfig) => call<NetworkStatus>("PUT", "/network/config", c),
+  networkStatus: () => call<NetworkStatus>("GET", "/network/status"),
 
   fixActions: () => call<FixAction[]>("GET", "/fix/actions"),
   fixPreview: (r: FixRequest) => call<FixPlan>("POST", "/fix/preview", r),

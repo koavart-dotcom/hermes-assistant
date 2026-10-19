@@ -57,6 +57,10 @@ pub struct Supervisor {
     pub(crate) wazuh_listener: Mutex<Option<CancellationToken>>,
     /// Hosts with a fix in progress (one at a time per host).
     pub(crate) fix_busy: Mutex<std::collections::HashSet<String>>,
+    /// HTTPS access from the network (see supervisor_network.rs).
+    pub(crate) network_app: Mutex<Option<axum::Router>>,
+    pub(crate) network_listener: Mutex<Option<CancellationToken>>,
+    pub(crate) network_state: Mutex<crate::netaccess::NetworkStatus>,
 }
 
 impl Supervisor {
@@ -81,6 +85,9 @@ impl Supervisor {
             wazuh: Mutex::new(crate::wazuh::WazuhState::default()),
             wazuh_listener: Mutex::new(None),
             fix_busy: Mutex::new(std::collections::HashSet::new()),
+            network_app: Mutex::new(None),
+            network_listener: Mutex::new(None),
+            network_state: Mutex::new(crate::netaccess::NetworkStatus::default()),
         })
     }
 

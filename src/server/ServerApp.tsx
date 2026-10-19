@@ -1,6 +1,15 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Bell, KeyRound, LogOut, Server, ScrollText, ShieldAlert } from "lucide-react";
+import {
+  Activity,
+  Bell,
+  KeyRound,
+  Lock,
+  LogOut,
+  Server,
+  ScrollText,
+  ShieldAlert,
+} from "lucide-react";
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +20,8 @@ import { InventoryPage } from "./pages/InventoryPage";
 import { WazuhPage } from "./pages/WazuhPage";
 import { KeysPage } from "./pages/KeysPage";
 import { LogsPage } from "./pages/LogsPage";
+import { AccessPage } from "./pages/AccessPage";
+import { Badge } from "@/components/ui/badge";
 import { ErrorText } from "./ui";
 
 interface Page {
@@ -18,6 +29,7 @@ interface Page {
   title: string;
   icon: ComponentType<{ className?: string }>;
   Component: ComponentType;
+  admin?: boolean;
 }
 
 const PAGES: Page[] = [
@@ -27,6 +39,7 @@ const PAGES: Page[] = [
   { id: "wazuh", title: "Wazuh", icon: ShieldAlert, Component: WazuhPage },
   { id: "keys", title: "Модель и ключи", icon: KeyRound, Component: KeysPage },
   { id: "logs", title: "Журнал", icon: ScrollText, Component: LogsPage },
+  { id: "access", title: "Доступ", icon: Lock, Component: AccessPage, admin: true },
 ];
 
 function currentPage(): string {
@@ -64,7 +77,8 @@ function Login({ onDone }: { onDone: () => void }) {
         <div>
           <h1 className="text-lg font-semibold">Hermes Server</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Вход по ключу Control API: файл <code className="text-xs">control.token</code> в
+            Ключ доступа от администратора. На самом сервере подходит и мастер-ключ: файл{" "}
+            <code className="text-xs">control.token</code> в
             <code className="text-xs">
               {" "}
               C:\ProgramData\Hermes Assistant Server\ua.koavart.hermes\
@@ -102,6 +116,9 @@ export function ServerApp() {
   const [page, setPage] = useState(currentPage);
   const qc = useQueryClient();
   const info = useQuery({ queryKey: ["info"], queryFn: () => api.info(), enabled: authed });
+  const me = useQuery({ queryKey: ["whoami"], queryFn: api.whoami, enabled: authed });
+  const readOnly = me.data?.role === "read";
+  const pages = PAGES.filter((p) => !p.admin || !readOnly);
 
   useEffect(() => {
     const onHash = () => setPage(currentPage());
@@ -122,7 +139,7 @@ export function ServerApp() {
     );
   }
 
-  const Current = PAGES.find((p) => p.id === page)?.Component ?? OverviewPage;
+  const Current = pages.find((p) => p.id === page)?.Component ?? OverviewPage;
   const logout = () => {
     clearToken();
     qc.clear();
@@ -137,9 +154,15 @@ export function ServerApp() {
           <div className="text-xs text-muted-foreground">
             {info.data ? `v${info.data.version}` : "…"}
           </div>
+          {me.data ? (
+            <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              {me.data.name}
+              {readOnly ? <Badge variant="secondary">только чтение</Badge> : null}
+            </div>
+          ) : null}
         </div>
         <nav className="flex flex-wrap gap-1 md:flex-col">
-          {PAGES.map((p) => (
+          {pages.map((p) => (
             <a
               key={p.id}
               href={`#/${p.id}`}
@@ -160,6 +183,11 @@ export function ServerApp() {
         </div>
       </aside>
       <main className="min-w-0 flex-1 space-y-4 p-4 md:p-6">
+        {readOnly ? (
+          <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            Ключ только для чтения: изменения и починка недоступны — сервер их отклонит.
+          </p>
+        ) : null}
         <Current />
       </main>
     </div>

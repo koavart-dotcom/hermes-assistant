@@ -39,11 +39,51 @@ pub struct ControlConfig {
     pub app_name: String,
     pub app_version: String,
     pub log_dir: PathBuf,
+    /// Accept the master `control.token` (loopback). The network listener sets
+    /// this to false: over the network only named access keys work.
+    pub accept_master: bool,
 }
 
 struct Ctl {
     sup: Arc<Supervisor>,
     cfg: ControlConfig,
+    /// Failed logins per address (network listener): (count, window start).
+    failures:
+        std::sync::Mutex<std::collections::HashMap<std::net::IpAddr, (u32, std::time::Instant)>>,
+}
+
+/// More failed logins than this from one address within [`LOCK_WINDOW`] → 429.
+const MAX_FAILURES: u32 = 10;
+const LOCK_WINDOW: Duration = Duration::from_secs(600);
+
+/// GET routes that show secrets or keys: admin only.
+const ADMIN_ONLY_GET: &[&str] = &[
+    "/wazuh/integration",
+    "/hermes/config",
+    "/hermes/env",
+    "/access/keys",
+];
+
+impl Ctl {
+    fn locked(&self, ip: std::net::IpAddr) -> bool {
+        let f = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+        f.get(&ip)
+            .is_some_and(|(n, since)| *n >= MAX_FAILURES && since.elapsed() < LOCK_WINDOW)
+    }
+
+    fn failed(&self, ip: std::net::IpAddr) {
+        let mut f = self.failures.lock().unwrap_or_else(|e| e.into_inner());
+        let e = f.entry(ip).or_insert((0, std::time::Instant::now()));
+        if e.1.elapsed() >= LOCK_WINDOW {
+            *e = (0, std::time::Instant::now());
+        }
+        e.0 += 1;
+        if e.0 == MAX_FAILURES {
+            log::warn!(
+                "control api: {ip} locked out for {LOCK_WINDOW:?} after {MAX_FAILURES} failed logins"
+            );
+        }
+    }
 }
 
 pub fn token_path(layout: &Layout) -> PathBuf {
@@ -76,7 +116,11 @@ pub fn port_from_env() -> u16 {
 }
 
 pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
-    let ctl = Arc::new(Ctl { sup, cfg });
+    let ctl = Arc::new(Ctl {
+        sup,
+        cfg,
+        failures: std::sync::Mutex::new(std::collections::HashMap::new()),
+    });
     let protected = Router::new()
         .route("/info", get(info))
         .route("/status", get(status))
@@ -148,6 +192,17 @@ pub fn router(sup: Arc<Supervisor>, cfg: ControlConfig) -> Router {
         .route("/fix/actions", get(fix_actions))
         .route("/fix/preview", post(fix_preview))
         .route("/fix/run", post(fix_run))
+        .route("/whoami", get(whoami))
+        .route("/access/keys", get(access_keys).post(access_key_create))
+        .route(
+            "/access/keys/{id}",
+            axum::routing::delete(access_key_delete),
+        )
+        .route(
+            "/network/config",
+            get(network_config_get).put(network_config_put),
+        )
+        .route("/network/status", get(network_status))
         .route("/permissions/log", get(permissions_log))
         .route(
             "/permissions/policy",
@@ -204,21 +259,61 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-async fn auth(State(ctl): State<Arc<Ctl>>, req: Request, next: Next) -> Response {
-    let ok = req
+/// Bearer auth: the master token (when accepted) or a named access key. Read-only
+/// keys may only GET, and not the routes in [`ADMIN_ONLY_GET`]. The caller goes into
+/// the request extensions for handlers that record who did what.
+async fn auth(State(ctl): State<Arc<Ctl>>, mut req: Request, next: Next) -> Response {
+    use crate::access::{Caller, Role};
+    let peer = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip());
+    if let Some(ip) = peer {
+        if ctl.locked(ip) {
+            return ApiError(
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many failed logins, try again later".into(),
+            )
+            .into_response();
+        }
+    }
+    let token = req
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|t| constant_time_eq(t.trim().as_bytes(), ctl.cfg.token.as_bytes()))
-        .unwrap_or(false);
-    if !ok {
+        .map(|t| t.trim().to_string());
+    let caller = match token.as_deref() {
+        Some(t)
+            if ctl.cfg.accept_master
+                && constant_time_eq(t.as_bytes(), ctl.cfg.token.as_bytes()) =>
+        {
+            Some(Caller {
+                name: "local".into(),
+                role: Role::Admin,
+            })
+        }
+        Some(t) if !t.is_empty() => crate::access::verify(&ctl.sup.ctx.layout, t),
+        _ => None,
+    };
+    let Some(caller) = caller else {
+        if let Some(ip) = peer {
+            ctl.failed(ip);
+        }
         return ApiError(
             StatusCode::UNAUTHORIZED,
             "missing or invalid bearer token".into(),
         )
         .into_response();
+    };
+    if caller.role == Role::Read {
+        let path = req.uri().path();
+        let secret = ADMIN_ONLY_GET.iter().any(|p| path.ends_with(p));
+        if req.method() != axum::http::Method::GET || secret {
+            return ApiError(StatusCode::FORBIDDEN, "this key is read-only".into()).into_response();
+        }
     }
+    req.extensions_mut().insert(caller);
     next.run(req).await
 }
 
@@ -508,6 +603,70 @@ async fn diag_run(
     Ok(Json(crate::diag::run(layout, &host, &refs).await))
 }
 
+// --------------------------------------------------- access and network --
+
+async fn whoami(
+    axum::Extension(caller): axum::Extension<crate::access::Caller>,
+) -> Json<crate::access::Caller> {
+    Json(caller)
+}
+
+async fn access_keys(State(ctl): State<Arc<Ctl>>) -> Json<Vec<crate::access::AccessKeyInfo>> {
+    Json(crate::access::list(&ctl.sup.ctx.layout))
+}
+
+#[derive(Deserialize)]
+struct KeyCreate {
+    name: String,
+    role: crate::access::Role,
+}
+
+/// The key is in the answer once; only its hash is kept.
+async fn access_key_create(
+    State(ctl): State<Arc<Ctl>>,
+    axum::Extension(caller): axum::Extension<crate::access::Caller>,
+    Json(r): Json<KeyCreate>,
+) -> ApiResult<Json<Value>> {
+    let (info, key) = crate::access::create(&ctl.sup.ctx.layout, &r.name, r.role)
+        .map_err(|e| bad_request(e.to_string()))?;
+    log::info!(
+        "access key `{}` ({:?}) created by {}",
+        info.name,
+        info.role,
+        caller.name
+    );
+    Ok(Json(json!({ "info": info, "key": key })))
+}
+
+async fn access_key_delete(
+    State(ctl): State<Arc<Ctl>>,
+    axum::Extension(caller): axum::Extension<crate::access::Caller>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> ApiResult<Json<Value>> {
+    let removed = crate::access::remove(&ctl.sup.ctx.layout, &id)?;
+    log::info!("access key {id} removed by {} ({removed})", caller.name);
+    Ok(Json(json!({ "ok": true, "removed": removed })))
+}
+
+async fn network_config_get(State(ctl): State<Arc<Ctl>>) -> Json<crate::netaccess::NetworkConfig> {
+    Json(crate::netaccess::NetworkConfig::load(&ctl.sup.ctx.layout))
+}
+
+/// Saves and restarts the HTTPS listener in place (server mode).
+async fn network_config_put(
+    State(ctl): State<Arc<Ctl>>,
+    Json(cfg): Json<crate::netaccess::NetworkConfig>,
+) -> ApiResult<Json<crate::netaccess::NetworkStatus>> {
+    cfg.save(&ctl.sup.ctx.layout)
+        .map_err(|e| bad_request(e.to_string()))?;
+    ctl.sup.network_apply().await;
+    Ok(Json(ctl.sup.network_status()))
+}
+
+async fn network_status(State(ctl): State<Arc<Ctl>>) -> Json<crate::netaccess::NetworkStatus> {
+    Json(ctl.sup.network_status())
+}
+
 // ------------------------------------------------------------------ fix --
 
 async fn fix_actions() -> Json<&'static [crate::fix::FixAction]> {
@@ -540,13 +699,16 @@ async fn fix_preview(
 async fn fix_run(
     State(ctl): State<Arc<Ctl>>,
     headers: axum::http::HeaderMap,
+    axum::Extension(caller): axum::Extension<crate::access::Caller>,
     Json(r): Json<FixReq>,
 ) -> ApiResult<Json<crate::fix::FixReport>> {
     // Who pressed the button, for fix.jsonl and Telegram.
-    let by = match headers.get("x-hermes-client").and_then(|v| v.to_str().ok()) {
+    let via = match headers.get("x-hermes-client").and_then(|v| v.to_str().ok()) {
         Some("web-panel") => "веб-панель",
         _ => "control api",
     };
+    let by = format!("{} ({via})", caller.name);
+    let by = by.as_str();
     if !r.confirm {
         return Err(bad_request("confirm the command first (confirm: true)"));
     }
@@ -1235,6 +1397,7 @@ mod tests {
                 app_name: "Hermes Assistant".into(),
                 app_version: "0.0.0".into(),
                 log_dir: PathBuf::from("/nonexistent"),
+                accept_master: true,
             },
         );
         let res = app
