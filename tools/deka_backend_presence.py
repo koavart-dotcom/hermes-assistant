@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Morning login / evening logout on backend.deka.ua for several accounts.
+"""Morning arrival / evening departure on backend.deka.ua for several accounts.
+
+"login"  — signs in; the backend records the first login of the day as arrival
+           («Приход») in «Документы → Учёт рабочего времени».
+"logout" — presses «Уход» on that page (POST workingDay/index/mark, type=outcome,
+           personal password), then closes the session via logout.php.
 
 Usage:
-    deka_backend_presence.py login  [--users a,b] [--env PATH] [--state-dir DIR] [--notify-success]
-    deka_backend_presence.py logout [--users a,b] [--env PATH] [--state-dir DIR] [--notify-success]
+    deka_backend_presence.py login  [--users a,b] [--env PATH] [--state-dir DIR] [--random-delay SEC] [--notify-success]
+    deka_backend_presence.py logout [--users a,b] [--env PATH] [--state-dir DIR] [--random-delay SEC] [--notify-success]
 
 Configuration (environment or Hermes .env):
     DEKA_BACKEND_USERS            comma-separated logins, e.g. "koav,ivanov"
@@ -11,10 +16,8 @@ Configuration (environment or Hermes .env):
     DEKA_BACKEND_USER / DEKA_BACKEND_PASSWORD   legacy single account (still honoured)
     NOTIFY_TELEGRAM_BOT_TOKEN, NOTIFY_TELEGRAM_CHAT_ID   failure alerts (optional)
 
-The morning session cookie is kept per user in the state dir and reused for the
-evening logout, so the backend sees one session opened in the morning and closed
-in the evening. If the session has expired by evening, the script logs in again
-and logs out immediately so a logout is still registered.
+The morning session cookie is kept per user in the state dir and reused in the
+evening; if it has expired, the script signs in again before pressing «Уход».
 Stdlib only: works under Hermes' Python without extra packages.
 """
 from __future__ import annotations
@@ -23,8 +26,10 @@ import argparse
 import http.cookiejar
 import json
 import os
+import random
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,6 +40,8 @@ BASE = "https://backend.deka.ua"
 LOGIN_URL = f"{BASE}/index.php?r=login"
 MAIN_URL = f"{BASE}/index.php?r=main"
 LOGOUT_URL = f"{BASE}/logout.php"
+WORKDAY_URL = f"{BASE}/index.php?r=workingDay/index"
+MARK_URL = f"{BASE}/index.php?r=workingDay/index/mark"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/130.0 Safari/537.36")
 TIMEOUT = 30
@@ -109,6 +116,15 @@ def is_logged_in(jar) -> bool:
     return status == 200
 
 
+def workday_state(jar) -> tuple[str | None, str | None, str | None]:
+    """Return (seller_id, arrival, departure) from the self-service block."""
+    _, _, html = fetch(opener(jar, follow=True), WORKDAY_URL)
+    m = re.search(r'name="user" value="(\d+)"', html)
+    arr = re.search(r"Приход:\s*([0-9:]+)", html)
+    dep = re.search(r"Уход:\s*([0-9:]+)", html)
+    return (m.group(1) if m else None, arr.group(1) if arr else None, dep.group(1) if dep else None)
+
+
 def do_login(login: str, password: str, jar) -> str:
     op = opener(jar, follow=True)
     fetch(op, LOGIN_URL)
@@ -118,18 +134,35 @@ def do_login(login: str, password: str, jar) -> str:
         raise RuntimeError("неправильное имя пользователя или пароль")
     if not is_logged_in(jar):
         raise RuntimeError("после входа сессия не открылась (снова страница входа)")
-    return "вход выполнен"
+    _, arrival, _ = workday_state(jar)
+    return f"вход выполнен, приход {arrival}" if arrival else "вход выполнен (приход на странице не показан)"
 
 
 def do_logout(login: str, password: str, jar) -> str:
     note = ""
     if not is_logged_in(jar):
         do_login(login, password, jar)
-        note = " (утренняя сессия истекла — вошёл заново и вышел)"
+        note = " (утренняя сессия истекла — вошёл заново)"
+    seller_id, arrival, departure = workday_state(jar)
+    if not seller_id:
+        raise RuntimeError("не нашёл id сотрудника на странице учёта рабочего времени")
+    if departure:
+        fetch(opener(jar, follow=True), LOGOUT_URL)
+        return f"уход уже отмечен в {departure}, повторно не нажимал" + note
+    req = urllib.request.Request(
+        MARK_URL,
+        data=urllib.parse.urlencode({"user": seller_id, "type": "outcome", "passwd": password}).encode(),
+        headers={"X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
+    try:
+        with opener(jar, follow=True).open(req, timeout=TIMEOUT) as r:
+            reply = r.read().decode("utf-8", "replace").strip()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"«Уход» отклонён: HTTP {e.code} {e.read().decode('utf-8', 'replace').strip()[:200]}") from None
+    _, _, departure = workday_state(jar)
+    if not departure:
+        raise RuntimeError(f"после «Уход» время ухода не появилось (ответ: {reply[:200]})")
     fetch(opener(jar, follow=True), LOGOUT_URL)
-    if is_logged_in(jar):
-        raise RuntimeError("после logout.php сессия всё ещё открыта")
-    return "выход выполнен" + note
+    return f"уход отмечен в {departure} (приход {arrival}), сессия закрыта" + note
 
 
 def notify(text: str) -> None:
@@ -152,8 +185,12 @@ def main() -> int:
     ap.add_argument("--users", help="логины через запятую (иначе DEKA_BACKEND_USERS)")
     ap.add_argument("--env", type=Path, help="путь к .env (иначе $HERMES_HOME/.env или ~/.hermes/.env)")
     ap.add_argument("--state-dir", type=Path, help="папка для cookie-файлов (иначе $HERMES_HOME/state/deka_backend)")
+    ap.add_argument("--random-delay", type=int, default=0, metavar="SEC",
+                    help="подождать случайное время 0..SEC секунд перед началом (чтобы время отметки не было одинаковым)")
     ap.add_argument("--notify-success", action="store_true", help="слать в Telegram и успех, не только ошибки")
     a = ap.parse_args()
+    if a.random_delay > 0:
+        time.sleep(random.randint(0, a.random_delay))
 
     load_env(a.env)
     try:
@@ -186,7 +223,7 @@ def main() -> int:
             failed.append(login)
             lines.append(f"{login}: ОШИБКА — {e}")
 
-    title = "вход" if a.action == "login" else "выход"
+    title = "вход (приход)" if a.action == "login" else "уход"
     report = f"backend.deka.ua, {title} {stamp}\n" + "\n".join(lines)
     print(report)
     if failed or a.notify_success:
