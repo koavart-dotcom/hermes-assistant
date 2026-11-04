@@ -13,6 +13,7 @@ Usage:
 Configuration (environment or Hermes .env):
     DEKA_BACKEND_USERS            comma-separated logins, e.g. "koav,ivanov"
     DEKA_BACKEND_PASSWORD_<LOGIN> password per login (login upper-cased, non-alnum -> "_")
+    DEKA_BACKEND_SITE_<LOGIN>     base URL for that login (default DEKA_BACKEND_SITE or https://backend.deka.ua)
     DEKA_BACKEND_USER / DEKA_BACKEND_PASSWORD   legacy single account (still honoured)
     NOTIFY_TELEGRAM_BOT_TOKEN, NOTIFY_TELEGRAM_CHAT_ID   failure alerts (optional)
 
@@ -36,12 +37,20 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-BASE = "https://backend.deka.ua"
-LOGIN_URL = f"{BASE}/index.php?r=login"
-MAIN_URL = f"{BASE}/index.php?r=main"
-LOGOUT_URL = f"{BASE}/logout.php"
-WORKDAY_URL = f"{BASE}/index.php?r=workingDay/index"
-MARK_URL = f"{BASE}/index.php?r=workingDay/index/mark"
+DEFAULT_BASE = "https://backend.deka.ua"
+
+
+class Site:
+    """Same Yii application is deployed per company; the base URL differs per account."""
+
+    def __init__(self, base: str):
+        self.base = base.rstrip("/")
+        self.host = urllib.parse.urlparse(self.base).hostname or self.base
+        self.login = f"{self.base}/index.php?r=login"
+        self.main = f"{self.base}/index.php?r=main"
+        self.logout = f"{self.base}/logout.php"
+        self.workday = f"{self.base}/index.php?r=workingDay/index"
+        self.mark = f"{self.base}/index.php?r=workingDay/index/mark"
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/130.0 Safari/537.36")
 TIMEOUT = 30
@@ -71,8 +80,13 @@ def load_env(path: Path | None) -> None:
             return
 
 
-def env_key(login: str) -> str:
-    return "DEKA_BACKEND_PASSWORD_" + re.sub(r"[^A-Za-z0-9]", "_", login).upper()
+def env_key(login: str, prefix: str = "DEKA_BACKEND_PASSWORD_") -> str:
+    return prefix + re.sub(r"[^A-Za-z0-9]", "_", login).upper()
+
+
+def site_for(login: str) -> Site:
+    return Site(os.environ.get(env_key(login, "DEKA_BACKEND_SITE_"))
+                or os.environ.get("DEKA_BACKEND_SITE") or DEFAULT_BASE)
 
 
 def accounts(cli_users: str | None) -> dict[str, str]:
@@ -111,46 +125,46 @@ def fetch(op, url: str, data: dict | None = None) -> tuple[int, str, str]:
         return e.code, e.headers.get("Location", ""), ""
 
 
-def is_logged_in(jar) -> bool:
-    status, loc, _ = fetch(opener(jar, follow=False), MAIN_URL)
+def is_logged_in(site: Site, jar) -> bool:
+    status, loc, _ = fetch(opener(jar, follow=False), site.main)
     return status == 200
 
 
-def workday_state(jar) -> tuple[str | None, str | None, str | None]:
+def workday_state(site: Site, jar) -> tuple[str | None, str | None, str | None]:
     """Return (seller_id, arrival, departure) from the self-service block."""
-    _, _, html = fetch(opener(jar, follow=True), WORKDAY_URL)
+    _, _, html = fetch(opener(jar, follow=True), site.workday)
     m = re.search(r'name="user" value="(\d+)"', html)
     arr = re.search(r"Приход:\s*([0-9:]+)", html)
     dep = re.search(r"Уход:\s*([0-9:]+)", html)
     return (m.group(1) if m else None, arr.group(1) if arr else None, dep.group(1) if dep else None)
 
 
-def do_login(login: str, password: str, jar) -> str:
+def do_login(site: Site, login: str, password: str, jar) -> str:
     op = opener(jar, follow=True)
-    fetch(op, LOGIN_URL)
-    _, _, html = fetch(op, LOGIN_URL, {
+    fetch(op, site.login)
+    _, _, html = fetch(op, site.login, {
         "LoginForm[username]": login, "LoginForm[password]": password, "yt0": "Войти"})
     if ERR_TEXT.search(html):
         raise RuntimeError("неправильное имя пользователя или пароль")
-    if not is_logged_in(jar):
+    if not is_logged_in(site, jar):
         raise RuntimeError("после входа сессия не открылась (снова страница входа)")
-    _, arrival, _ = workday_state(jar)
+    _, arrival, _ = workday_state(site, jar)
     return f"вход выполнен, приход {arrival}" if arrival else "вход выполнен (приход на странице не показан)"
 
 
-def do_logout(login: str, password: str, jar) -> str:
+def do_logout(site: Site, login: str, password: str, jar) -> str:
     note = ""
-    if not is_logged_in(jar):
-        do_login(login, password, jar)
+    if not is_logged_in(site, jar):
+        do_login(site, login, password, jar)
         note = " (утренняя сессия истекла — вошёл заново)"
-    seller_id, arrival, departure = workday_state(jar)
+    seller_id, arrival, departure = workday_state(site, jar)
     if not seller_id:
         raise RuntimeError("не нашёл id сотрудника на странице учёта рабочего времени")
     if departure:
-        fetch(opener(jar, follow=True), LOGOUT_URL)
+        fetch(opener(jar, follow=True), site.logout)
         return f"уход уже отмечен в {departure}, повторно не нажимал" + note
     req = urllib.request.Request(
-        MARK_URL,
+        site.mark,
         data=urllib.parse.urlencode({"user": seller_id, "type": "outcome", "passwd": password}).encode(),
         headers={"X-Requested-With": "XMLHttpRequest", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"})
     try:
@@ -158,10 +172,10 @@ def do_logout(login: str, password: str, jar) -> str:
             reply = r.read().decode("utf-8", "replace").strip()
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"«Уход» отклонён: HTTP {e.code} {e.read().decode('utf-8', 'replace').strip()[:200]}") from None
-    _, _, departure = workday_state(jar)
+    _, _, departure = workday_state(site, jar)
     if not departure:
         raise RuntimeError(f"после «Уход» время ухода не появилось (ответ: {reply[:200]})")
-    fetch(opener(jar, follow=True), LOGOUT_URL)
+    fetch(opener(jar, follow=True), site.logout)
     return f"уход отмечен в {departure} (приход {arrival}), сессия закрыта" + note
 
 
@@ -211,20 +225,21 @@ def main() -> int:
                 jar.load(ignore_discard=True, ignore_expires=True)
             except Exception:  # noqa: BLE001
                 jar_path.unlink(missing_ok=True)
+        site = site_for(login)
         try:
-            msg = do_login(login, pw, jar) if a.action == "login" else do_logout(login, pw, jar)
+            msg = do_login(site, login, pw, jar) if a.action == "login" else do_logout(site, login, pw, jar)
             if a.action == "login":
                 jar.save(ignore_discard=True, ignore_expires=True)
                 jar_path.chmod(0o600)
             else:
                 jar_path.unlink(missing_ok=True)
-            lines.append(f"{login}: {msg}")
+            lines.append(f"{login} @ {site.host}: {msg}")
         except Exception as e:  # noqa: BLE001
             failed.append(login)
-            lines.append(f"{login}: ОШИБКА — {e}")
+            lines.append(f"{login} @ {site.host}: ОШИБКА — {e}")
 
     title = "вход (приход)" if a.action == "login" else "уход"
-    report = f"backend.deka.ua, {title} {stamp}\n" + "\n".join(lines)
+    report = f"Учёт рабочего времени, {title} {stamp}\n" + "\n".join(lines)
     print(report)
     if failed or a.notify_success:
         notify(("⚠️ " if failed else "✅ ") + report)
