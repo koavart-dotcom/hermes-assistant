@@ -10,6 +10,10 @@ Usage:
     deka_backend_presence.py login  [--users a,b] [--env PATH] [--state-dir DIR] [--random-delay SEC] [--notify-success]
     deka_backend_presence.py logout [--users a,b] [--env PATH] [--state-dir DIR] [--random-delay SEC] [--notify-success]
 
+Вечером «Уход» нажимается только если утром этот же скрипт отметил приход (маркер <login>.arrival в --state-dir
+за сегодня): приход = первый вход за день, и вход вечером поставил бы приход 18:00. Без маркера — пропуск и ⚠️ в Telegram.
+Сообщение в Telegram шлётся после каждого прихода и ухода (--no-notify-success — только ошибки).
+
 Configuration (environment or Hermes .env):
     DEKA_BACKEND_USERS            comma-separated logins, e.g. "koav,ivanov"
     DEKA_BACKEND_PASSWORD_<LOGIN> password per login (login upper-cased, non-alnum -> "_")
@@ -201,7 +205,10 @@ def main() -> int:
     ap.add_argument("--state-dir", type=Path, help="папка для cookie-файлов (иначе $HERMES_HOME/state/deka_backend)")
     ap.add_argument("--random-delay", type=int, default=0, metavar="SEC",
                     help="подождать случайное время 0..SEC секунд перед началом (чтобы время отметки не было одинаковым)")
-    ap.add_argument("--notify-success", action="store_true", help="слать в Telegram и успех, не только ошибки")
+    ap.add_argument("--notify-success", action="store_true", default=True,
+                    help="слать в Telegram и успех (по умолчанию включено; выключить — --no-notify-success)")
+    ap.add_argument("--no-notify-success", dest="notify_success", action="store_false",
+                    help="слать в Telegram только ошибки и пропуски")
     a = ap.parse_args()
     if a.random_delay > 0:
         time.sleep(random.randint(0, a.random_delay))
@@ -214,7 +221,9 @@ def main() -> int:
         return 2
     state = a.state_dir or Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")) / "state" / "deka_backend"
     state.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%d.%m.%Y %H:%M")
+    now = datetime.now()
+    stamp = now.strftime("%d.%m.%Y %H:%M")
+    today = now.strftime("%Y-%m-%d")
 
     lines, failed = [], []
     for login, pw in accs.items():
@@ -226,13 +235,24 @@ def main() -> int:
             except Exception:  # noqa: BLE001
                 jar_path.unlink(missing_ok=True)
         site = site_for(login)
+        # Marker of the morning run: приход = первый вход за день, поэтому вечером без него
+        # нельзя даже логиниться — иначе приход встанет временем ухода (18:00).
+        marker = state / f"{jar_path.stem}.arrival"
+        if a.action == "logout" and (not marker.exists() or not marker.read_text().startswith(today)):
+            jar_path.unlink(missing_ok=True)
+            failed.append(login)
+            lines.append(f"{login} @ {site.host}: ПРОПУСК — утром скрипт приход не отмечал, «Уход» не нажимал "
+                         f"(иначе приход встал бы в {now:%H:%M}); отметьте приход и уход вручную")
+            continue
         try:
             msg = do_login(site, login, pw, jar) if a.action == "login" else do_logout(site, login, pw, jar)
             if a.action == "login":
                 jar.save(ignore_discard=True, ignore_expires=True)
                 jar_path.chmod(0o600)
+                marker.write_text(f"{today} {msg}\n")
             else:
                 jar_path.unlink(missing_ok=True)
+                marker.unlink(missing_ok=True)
             lines.append(f"{login} @ {site.host}: {msg}")
         except Exception as e:  # noqa: BLE001
             failed.append(login)
@@ -242,7 +262,7 @@ def main() -> int:
     report = f"Учёт рабочего времени, {title} {stamp}\n" + "\n".join(lines)
     print(report)
     if failed or a.notify_success:
-        notify(("⚠️ " if failed else "✅ ") + report)
+        notify(("⚠️ " if failed else "✅ ") + report)  # по умолчанию — каждый приход и уход
     return 1 if failed else 0
 
 
